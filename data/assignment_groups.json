@@ -1,0 +1,13 @@
+{
+  "active_groups": [
+    "IT-SC Operations Application Support",
+    "IT-SC GBS App Support",
+    "IT-Asia-SOA-Central-App-Support",
+    "IT-SC-EPAM-SAP Workflow",
+    "IT-SC-EPAM-SAP-AMS-Support",
+    "IT-SC-EPAM-SAP Hybris CRM Support",
+    "IT-Portal-Central",
+    "IT-SCM-EPAM L2"
+  ],
+  "deprecated_mapping": {}
+}

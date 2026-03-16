@@ -1,0 +1,24 @@
+servicenow:
+  instance_url: "https://dev300186.service-now.com"
+  username: "admin"
+  password: "Mg=72E/gDpmS"
+
+azure_blob:
+  connection_string: "AZURE_BLOB_CONNECTION_STRING"
+  container_name: "knowledge-container"
+  blob_name: "assignment_groups.json"
+
+confidence_threshold: 7
+
+polling:
+  interval_seconds: 60
+
+model:
+  path: "models/assignment_model.pkl"
+
+database:
+  feedback_db: "data/feedback.db"
+
+logging:
+  level: "INFO"
+  log_file: "data/audit.log"
