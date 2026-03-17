@@ -43,7 +43,7 @@ class TicketIngestionAgent:
             "Content-Type": "application/json",
         }
 
-    def fetch_unassigned_tickets(self, limit: int = 10) -> list[dict]:
+    def fetch_unassigned_tickets(self, limit: int = 200) -> list[dict]:
         """
         Returns a list of unassigned incident records from ServiceNow.
         """
