@@ -1,17 +1,7 @@
-"""
-train_from_tickets.py
-----------------------
-Trains the routing model from your real CSV file.
-
-  Source  : data/training_tickets.csv  (your Assignment_Ticket CSV)
-  Routing : Based on Short Description + Description only
-  Ignored : Configuration Item (as requested)
-
-Run once before starting the agent:
-    python train_from_tickets.py
-"""
-
-import os, sys, csv, joblib
+import os
+import sys
+import csv
+import joblib
 import numpy as np
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -21,29 +11,29 @@ from sklearn.model_selection import StratifiedKFold, cross_val_score
 sys.path.insert(0, os.path.dirname(__file__))
 from agents.historical_data_agent import HistoricalDataAgent
 
-GREEN = "\033[92m"; CYAN = "\033[96m"; BOLD = "\033[1m"; RESET = "\033[0m"
 CSV_PATH = "data/training_tickets.csv"
 
 AUGMENTATIONS = [
-    lambda t: t,                                                    # original
-    lambda t: {**t, "priority": "1"},                              # critical priority
-    lambda t: {**t, "priority": "4"},                              # low priority
+    lambda t: t,
+    lambda t: {**t, "priority": "1"},
+    lambda t: {**t, "priority": "4"},
     lambda t: {**t, "short_description": "URGENT: " + t["short_description"]},
     lambda t: {**t, "description": t["description"] + " Please escalate."},
-    lambda t: {**t, "category": "", "subcategory": ""},            # empty category
+    lambda t: {**t, "category": "", "subcategory": ""},
 ]
 
 
 def main():
-    print(f"""
-{BOLD}{CYAN}╔══════════════════════════════════════════════════════════╗
-║   Training Model — Routing by SD + Description Only     ║
-╚══════════════════════════════════════════════════════════╝{RESET}
-""")
+    print("")
+    print("=" * 60)
+    print("  Training Model from Real Team CSV")
+    print("=" * 60)
+    print("")
 
     if not os.path.exists(CSV_PATH):
-        print(f"  ❌  CSV not found: {CSV_PATH}")
-        print(f"      Copy your team CSV there first.\n")
+        print("  ERROR: CSV not found at " + CSV_PATH)
+        print("  Copy your team CSV there and retry.")
+        print("")
         sys.exit(1)
 
     agent = HistoricalDataAgent()
@@ -71,13 +61,14 @@ def main():
 
     from collections import Counter
     dist = Counter(y)
-    print(f"  Source CSV rows    : {len(y) // len(AUGMENTATIONS)}")
-    print(f"  Augmented samples  : {len(X)}")
-    print(f"  Feature vector len : {X.shape[1]}")
-    print(f"  Teams              : {len(dist)}\n")
+    print("  Source CSV rows    : " + str(len(y) // len(AUGMENTATIONS)))
+    print("  Augmented samples  : " + str(len(X)))
+    print("  Feature vector len : " + str(X.shape[1]))
+    print("  Teams              : " + str(len(dist)))
+    print("")
     for team, cnt in sorted(dist.items()):
-        print(f"    {team:<48} {cnt:>3} samples")
-    print()
+        print("    {:<48} {:>3} samples".format(team, cnt))
+    print("")
 
     model = Pipeline([
         ("scaler", StandardScaler()),
@@ -88,19 +79,23 @@ def main():
 
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     scores = cross_val_score(model, X, y, cv=cv)
-    print(f"  Cross-validation accuracy : {scores.mean():.1%}  (±{scores.std():.1%})\n")
+    print("  Cross-validation accuracy : " + str(round(scores.mean() * 100, 1)) + "%  (+/- " + str(round(scores.std() * 100, 1)) + "%)")
+    print("")
 
     model.fit(X, y)
     os.makedirs("models", exist_ok=True)
     joblib.dump(model, "models/assignment_model.pkl")
 
-    print(f"  {GREEN}✅  Model saved → models/assignment_model.pkl{RESET}\n")
-    print(f"  Teams the model routes to:")
+    print("  Model saved -> models/assignment_model.pkl")
+    print("")
+    print("  Teams the model routes to:")
     for cls in model.classes_:
-        print(f"    • {cls}")
-    print(f"\n  {BOLD}Next steps:{RESET}")
-    print(f"    python create_sample_tickets.py   ← push 50 tickets to ServiceNow")
-    print(f"    python run_agent.py               ← AI routes them\n")
+        print("    + " + cls)
+    print("")
+    print("  Next steps:")
+    print("    python create_sample_tickets.py   <- push tickets to ServiceNow")
+    print("    python run_agent.py               <- AI routes them")
+    print("")
 
 
 if __name__ == "__main__":
