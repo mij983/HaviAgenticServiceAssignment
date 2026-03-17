@@ -200,7 +200,7 @@ def run(watch: bool = False):
         print("  [" + ts + "]  Poll #" + str(poll_count) + " -- Fetching unassigned tickets...")
         print("=" * 60)
 
-        tickets = ingestion.fetch_unassigned_tickets(limit=20)
+        tickets = ingestion.fetch_unassigned_tickets(limit=50)
 
         if not tickets:
             print("")
