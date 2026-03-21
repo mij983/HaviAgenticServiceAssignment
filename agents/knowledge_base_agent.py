@@ -11,11 +11,6 @@ ChromaDB stores:
   - The embedding vector for each ticket
   - Metadata: short_description, description, assignment_group
   - Persists to disk so rebuild is only needed when CSV changes
-
-Incremental loading:
-  Pass start and end row indices to load the CSV in chunks.
-  Each chunk is ADDED to the existing knowledge base — nothing is overwritten.
-  IDs are based on the global row index so they never clash across runs.
 """
 
 import csv
@@ -45,25 +40,23 @@ class KnowledgeBaseAgent:
             metadata={"hnsw:space": "cosine"},   # cosine similarity
         )
 
-    def build(self, csv_path: str, embedding_agent,
-              force_rebuild: bool = False,
-              start: int = 0,
-              end: int = 10000):
+    def build(self, csv_path: str, embedding_agent, force_rebuild: bool = False):
         """
-        Build or append to the knowledge base from the CSV file.
+        Build the knowledge base from the CSV file.
 
-        - start / end  : row slice to process (0-based, end is exclusive)
-        - force_rebuild: wipe everything and start from scratch
+        Reads every row from training_tickets.csv, embeds the
+        short_description + description text, and stores in ChromaDB.
 
-        Rows are read from the full CSV but only the slice [start:end] is
-        embedded and stored. IDs use the global row index so multiple runs
-        never produce duplicate or clashing IDs.
+        Set force_rebuild=True to wipe and rebuild from scratch.
         """
         self._connect()
 
         existing_count = self.collection.count()
+        if existing_count > 0 and not force_rebuild:
+            print("  Knowledge base already exists with " + str(existing_count) + " tickets.")
+            print("  Skipping build. Use --rebuild flag to force rebuild.")
+            return existing_count
 
-        # Wipe and rebuild if requested
         if force_rebuild and existing_count > 0:
             print("  Rebuilding knowledge base from scratch...")
             self.client.delete_collection(self.collection_name)
@@ -71,18 +64,9 @@ class KnowledgeBaseAgent:
                 name=self.collection_name,
                 metadata={"hnsw:space": "cosine"},
             )
-            existing_count = 0
 
-        if existing_count > 0:
-            print("  Existing knowledge base: " + str(existing_count) + " tickets.")
-            print("  Appending new batch (rows " + str(start) + " to " + str(end) + ")...")
-        else:
-            print("  Starting fresh knowledge base.")
-            print("  Loading rows " + str(start) + " to " + str(end) + "...")
-
-        # Read full CSV and keep track of global row index
-        # Only rows in [start, end) are kept for embedding
-        all_rows = []
+        # Read CSV
+        rows = []
         with open(csv_path, newline="", encoding="latin-1") as fh:
             for row in csv.DictReader(fh):
                 team = row.get("Assignment Team", "").strip()
@@ -92,38 +76,24 @@ class KnowledgeBaseAgent:
                 desc = row.get("Description", "").strip()
                 if not sd:
                     continue
-                all_rows.append({
+                rows.append({
+                    "id":               str(len(rows)),
                     "short_description": sd,
                     "description":       desc,
                     "assignment_group":  team,
                     "text":              sd + " " + desc,
                 })
 
-        # Slice the requested range
-        rows = all_rows[start:end]
-
         if not rows:
-            print("  [WARNING] No rows found in range " + str(start) + " to " + str(end) + ".")
-            print("  Total rows in CSV: " + str(len(all_rows)))
-            return self.collection.count()
+            print("  [ERROR] No valid rows found in CSV.")
+            return 0
 
-        print("  " + str(len(rows)) + " tickets to embed in this batch...")
+        print("  Embedding " + str(len(rows)) + " tickets into knowledge base...")
+        texts = [r["text"] for r in rows]
+        embeddings = embedding_agent.embed_batch(texts)
 
-        # Embed in chunks of 2000 to keep memory usage low
-        chunk_size = 2000
-        embeddings = []
-        for i in range(0, len(rows), chunk_size):
-            chunk = [r["text"] for r in rows[i : i + chunk_size]]
-            embeddings.extend(embedding_agent.embed_batch(chunk))
-            done = min(i + chunk_size, len(rows))
-            print("  Embedded " + str(done) + " / " + str(len(rows)) + " tickets...")
-
-        # Assign globally unique IDs using the start offset
-        for i, row in enumerate(rows):
-            row["id"] = str(start + i)
-
-        # Store in ChromaDB in batches of 500
-        batch_size = 500
+        # Store in ChromaDB in batches
+        batch_size = 100
         for i in range(0, len(rows), batch_size):
             batch     = rows[i : i + batch_size]
             batch_emb = embeddings[i : i + batch_size]
@@ -142,7 +112,7 @@ class KnowledgeBaseAgent:
             )
 
         total = self.collection.count()
-        print("  Batch complete. Knowledge base total: " + str(total) + " tickets.")
+        print("  Knowledge base built with " + str(total) + " tickets.")
         return total
 
     def search(self, query_embedding: list[float], top_k: int = 5) -> list[dict]:
@@ -150,8 +120,7 @@ class KnowledgeBaseAgent:
         Find the top-K most similar tickets to the query embedding.
 
         Returns list of dicts with:
-          short_description, description, assignment_group,
-          similarity_score (1-10), similarity_raw (0-1)
+          short_description, description, assignment_group, distance
         """
         if self.collection is None:
             self._connect()
@@ -166,14 +135,14 @@ class KnowledgeBaseAgent:
         for i in range(len(results["ids"][0])):
             meta = results["metadatas"][0][i]
             # cosine similarity in [0, 1]; scale to 1-10 for display
-            raw_sim = round(1 - results["distances"][0][i], 4)
-            scaled  = round(1 + raw_sim * 9, 1)   # 0.0 -> 1.0,  1.0 -> 10.0
+            raw_sim  = round(1 - results["distances"][0][i], 4)
+            scaled   = round(1 + raw_sim * 9, 1)   # 0.0 -> 1.0, 1.0 -> 10.0
             tickets.append({
                 "short_description": meta.get("short_description", ""),
                 "description":       meta.get("description", ""),
                 "assignment_group":  meta.get("assignment_group", ""),
-                "similarity_score":  scaled,     # 1.0 – 10.0  (for display)
-                "similarity_raw":    raw_sim,    # 0.0 – 1.0   (for vote math)
+                "similarity_score":  scaled,        # 1.0 – 10.0
+                "similarity_raw":    raw_sim,        # kept for weighted-vote math
             })
 
         return tickets

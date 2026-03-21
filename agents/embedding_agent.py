@@ -26,7 +26,7 @@ class EmbeddingAgent:
     def load(self):
         """Load the embedding model. Called once at startup."""
         print("  Loading embedding model: " + self.model_name)
-        self.model = SentenceTransformer(self.model_name, cache_folder="models/")
+        self.model = SentenceTransformer(self.model_name)
         print("  Embedding model ready.")
 
     def embed(self, text: str) -> list[float]:
