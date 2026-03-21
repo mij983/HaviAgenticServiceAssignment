@@ -1,5 +1,5 @@
 embedding:
-  model: "all-MiniLM-L6-v2"         # sentence-transformer model (runs locally, no API key)
+  model: "all-MiniLM-L6-v2"         # sentence-transformer model (runs locally, no API key) / Powerfull (nomic-embed-text-v2-moe)
 
 vector_db:
   path: "data/chroma_db"             # ChromaDB persistent storage
