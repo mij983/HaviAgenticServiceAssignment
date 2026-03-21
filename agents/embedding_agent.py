@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 class EmbeddingAgent:
 
-    def __init__(self, model_name: str = "all-MiniLM-L2-v2"):
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
         self.model_name = model_name
         self.model = None
 
