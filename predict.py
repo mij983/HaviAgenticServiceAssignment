@@ -6,9 +6,9 @@ get back the predicted assignment group.
 
 Changes:
   - Non-IT input is caught and rejected with a clear message
-  - Similarity threshold: if best similarity < 7.0, user is asked to
-    confirm the predicted group (YES / NO). If NO, a numbered list of
-    all assignment groups is shown and the user picks a number.
+  - Similarity threshold: if best similarity < 7.0, ticket is
+    automatically assigned to IT-Service Desk (default group)
+    instead of asking the user — ready for future integration
 
 No ServiceNow connection needed. Everything runs locally.
 
@@ -89,64 +89,7 @@ def best_similarity(result: dict) -> float:
     return max(t["similarity_score"] for t in tickets)
 
 
-def prompt_manual_group(valid_groups: list[str]) -> str:
-    """
-    Show a numbered list of all assignment groups and ask the user
-    to pick one by number. Loops until a valid number is entered.
-    """
-    print("")
-    print("  Please select the correct assignment group by number:")
-    print("")
-    for i, group in enumerate(valid_groups, 1):
-        print("  {:>3}.  {}".format(i, group))
-    print("")
-
-    while True:
-        try:
-            raw = input("  Enter number (1-" + str(len(valid_groups)) + "): ").strip()
-            num = int(raw)
-            if 1 <= num <= len(valid_groups):
-                chosen = valid_groups[num - 1]
-                print("")
-                print("  ✔  Manually assigned to: " + chosen)
-                print("")
-                return chosen
-            else:
-                print("  [ERROR] Please enter a number between 1 and " + str(len(valid_groups)))
-        except ValueError:
-            print("  [ERROR] Invalid input. Please enter a number.")
-
-
-def handle_low_similarity(result: dict, valid_groups: list[str]) -> str:
-    """
-    When best similarity < SIMILARITY_THRESHOLD:
-      1. Show the predicted group with a low-confidence warning
-      2. Ask: is this the correct assignment group? (yes / no)
-      3. If yes  -> return the predicted group
-      4. If no   -> show numbered list, user picks manually
-    Returns the final assignment group name.
-    """
-    predicted = result["assignment_group"]
-
-    print("")
-    print("  ⚠  LOW SIMILARITY WARNING")
-    print("  The best matching ticket has similarity below " + str(SIMILARITY_THRESHOLD) + "/10.")
-    print("  The predicted group may not be accurate.")
-    print("")
-    print("  Predicted assignment group: " + predicted)
-    print("")
-
-    while True:
-        answer = input("  Is this the correct assignment group? (yes / no): ").strip().lower()
-        if answer in ("yes", "y"):
-            print("")
-            print("  ✔  Confirmed: " + predicted)
-            print("")
-            return predicted
-        elif answer in ("no", "n"):
-            return prompt_manual_group(valid_groups)
-        else:
-            print("  [ERROR] Please type yes or no.")
+DEFAULT_GROUP = "IT-Service Desk"
 
 
 def run_pipeline(short_description: str, config: dict,
@@ -207,11 +150,9 @@ def process_one(user_input: str, config: dict,
     """
     Run the pipeline for one input and handle all output logic:
       - Non-IT input rejection
-      - Normal high-similarity result
-      - Low-similarity confirmation flow
+      - Low similarity (< SIMILARITY_THRESHOLD) -> auto-assign to DEFAULT_GROUP
+      - Normal result
     """
-    valid_groups = config["assignment_groups"]
-
     result = run_pipeline(user_input, config, embed_agent, kb_agent, llm_agent, preprocessor)
 
     # ── Non-IT input ──────────────────────────────────────────────────────
@@ -234,18 +175,17 @@ def process_one(user_input: str, config: dict,
         print("")
         return
 
-    # ── Low similarity — ask user to confirm ─────────────────────────────
+    # ── Low similarity — auto-assign to default group ─────────────────────
     top_sim = best_similarity(result)
     if top_sim < SIMILARITY_THRESHOLD:
+        result["assignment_group"] = DEFAULT_GROUP
+        result["confidence"]       = "low"
         print_result(result, user_input)
-        final_group = handle_low_similarity(result, valid_groups)
-        # Update result with confirmed/manual group for display
-        result["assignment_group"] = final_group
-        print("  Final assignment: " + final_group)
+        print("  ⚠  Similarity below " + str(SIMILARITY_THRESHOLD) + "/10 — auto-assigned to: " + DEFAULT_GROUP)
         print("")
         return
 
-    # ── Normal high-confidence result ─────────────────────────────────────
+    # ── Normal result ─────────────────────────────────────────────────────
     print_result(result, user_input)
 
 

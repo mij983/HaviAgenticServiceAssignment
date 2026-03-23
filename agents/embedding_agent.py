@@ -8,7 +8,14 @@ Model: all-MiniLM-L6-v2
   - 384 dimensional embeddings
   - Fast, lightweight, runs on CPU
   - No API key required
-  - Downloads once (~90MB), cached locally
+  - Downloads once (~90MB), cached to models/ folder locally
+    so it never re-downloads on subsequent runs
+
+Cache:
+  Model files are saved to models/ inside the project folder.
+  On Windows, make sure HF_TOKEN is set to avoid rate limiting:
+    setx HF_TOKEN "hf_your_token_here"
+  Then close and reopen the command prompt before running.
 """
 
 import logging
@@ -21,24 +28,30 @@ class EmbeddingAgent:
 
     def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
         self.model_name = model_name
-        self.model = None
+        self.model      = None
 
     def load(self):
-        """Load the embedding model. Called once at startup."""
+        """
+        Load the embedding model. Called once at startup.
+        Model is cached to models/ folder so it downloads only once.
+        """
         print("  Loading embedding model: " + self.model_name)
-        self.model = SentenceTransformer(self.model_name)
+        self.model = SentenceTransformer(self.model_name, cache_folder="models/")
         print("  Embedding model ready.")
 
     def embed(self, text: str) -> list[float]:
         """Convert a single text string into an embedding vector."""
         if self.model is None:
             self.load()
-        text = self._preprocess(text)
+        text   = self._preprocess(text)
         vector = self.model.encode(text, convert_to_numpy=True)
         return vector.tolist()
 
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
-        """Convert a list of texts into embedding vectors (faster than one by one)."""
+        """
+        Convert a list of texts into embedding vectors.
+        Faster than calling embed() one by one — uses batched encoding internally.
+        """
         if self.model is None:
             self.load()
         cleaned = [self._preprocess(t) for t in texts]
@@ -49,8 +62,7 @@ class EmbeddingAgent:
         """Clean text before embedding."""
         if not text:
             return ""
-        # Lowercase, strip extra whitespace
+        # Lowercase and strip extra whitespace
         text = text.lower().strip()
-        # Remove excessive punctuation but keep meaningful characters
         text = " ".join(text.split())
         return text
