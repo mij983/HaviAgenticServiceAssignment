@@ -180,6 +180,7 @@ def process_one(user_input: str, config: dict,
     if top_sim < SIMILARITY_THRESHOLD:
         result["assignment_group"] = DEFAULT_GROUP
         result["confidence"]       = "low"
+        result["confidence_score"] = 1
         print_result(result, user_input)
         print("  ⚠  Similarity below " + str(SIMILARITY_THRESHOLD) + "/10 — auto-assigned to: " + DEFAULT_GROUP)
         print("")
