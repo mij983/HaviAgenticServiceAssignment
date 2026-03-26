@@ -9,3 +9,7 @@ ollama>=0.2.0
 pandas>=2.0.0
 numpy>=1.26.0
 pyyaml>=6.0.0
+
+# KB document ingestion (optional but recommended)
+pypdf>=4.0.0          # PDF support  -- pip install pypdf
+beautifulsoup4>=4.12  # HTML support -- pip install beautifulsoup4

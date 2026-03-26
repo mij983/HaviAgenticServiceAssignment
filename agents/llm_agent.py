@@ -375,15 +375,32 @@ class LLMAgent:
         prompt  = "NEW TICKET:\n"
         prompt += short_description + "\n\n"
 
-        prompt += "SIMILAR HISTORICAL TICKETS (ranked by similarity, highest first):\n"
-        for i, ticket in enumerate(similar_tickets, 1):
-            prompt += (
-                str(i) + ". [" + ticket["assignment_group"] + "] "
-                + ticket["short_description"]
-                + " (similarity: " + str(ticket["similarity_score"]) + "/10)\n"
-            )
+        # Split results into historical tickets vs KB document chunks
+        hist_tickets = [t for t in similar_tickets if t.get("source_type", "ticket") == "ticket"]
+        doc_chunks   = [t for t in similar_tickets if t.get("source_type") == "document"]
 
-        prompt += "\nVALID ASSIGNMENT GROUPS:\n"
+        if hist_tickets:
+            prompt += "SIMILAR HISTORICAL TICKETS (ranked by similarity, highest first):\n"
+            for i, ticket in enumerate(hist_tickets, 1):
+                prompt += (
+                    str(i) + ". [" + ticket["assignment_group"] + "] "
+                    + ticket["short_description"]
+                    + " (similarity: " + str(ticket["similarity_score"]) + "/10)\n"
+                )
+            prompt += "\n"
+
+        if doc_chunks:
+            prompt += "RELEVANT KB ARTICLES / DOCUMENTS:\n"
+            for i, chunk in enumerate(doc_chunks, 1):
+                team_hint = (" -> " + chunk["assignment_group"]) if chunk["assignment_group"] else ""
+                prompt += (
+                    str(i) + ". [" + chunk["short_description"] + "]" + team_hint + "\n"
+                    + "   " + chunk["description"][:300] + "\n"
+                    + "   (similarity: " + str(chunk["similarity_score"]) + "/10)\n"
+                )
+            prompt += "\n"
+
+        prompt += "VALID ASSIGNMENT GROUPS:\n"
         for group in valid_groups:
             prompt += "- " + group + "\n"
 

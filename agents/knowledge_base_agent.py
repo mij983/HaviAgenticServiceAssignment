@@ -154,6 +154,8 @@ class KnowledgeBaseAgent:
                         "short_description": r["short_description"],
                         "description":       r["description"][:500],
                         "assignment_group":  r["assignment_group"],
+                        "source_type":       "ticket",
+                        "file_name":         "",
                     }
                     for r in batch
                 ],
@@ -166,7 +168,8 @@ class KnowledgeBaseAgent:
 
     def search(self, query_embedding: list[float], top_k: int = 5) -> list[dict]:
         """
-        Find the top-K most similar tickets to the query embedding.
+        Find the top-K most similar entries (tickets OR document chunks)
+        to the query embedding.
 
         Returns list of dicts with:
           short_description : str
@@ -174,6 +177,8 @@ class KnowledgeBaseAgent:
           assignment_group  : str
           similarity_score  : float  1.0-10.0  (scaled for display)
           similarity_raw    : float  0.0-1.0   (kept for weighted-vote math)
+          source_type       : "ticket" | "document"
+          file_name         : str  (document chunks only, else "")
         """
         if self.collection is None:
             self._connect()
@@ -190,12 +195,15 @@ class KnowledgeBaseAgent:
             # cosine similarity in [0,1]; scale to 1-10 for display
             raw_sim = round(1 - results["distances"][0][i], 4)
             scaled  = round(1 + raw_sim * 9, 1)   # 0.0 -> 1.0,  1.0 -> 10.0
+            source_type = meta.get("source_type", "ticket")
             tickets.append({
                 "short_description": meta.get("short_description", ""),
                 "description":       meta.get("description", ""),
                 "assignment_group":  meta.get("assignment_group", ""),
-                "similarity_score":  scaled,     # 1.0 – 10.0  (display)
-                "similarity_raw":    raw_sim,    # 0.0 – 1.0   (vote math)
+                "similarity_score":  scaled,       # 1.0 – 10.0  (display)
+                "similarity_raw":    raw_sim,      # 0.0 – 1.0   (vote math)
+                "source_type":       source_type,  # "ticket" or "document"
+                "file_name":         meta.get("file_name", ""),
             })
 
         return tickets

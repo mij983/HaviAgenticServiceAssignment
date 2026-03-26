@@ -2,7 +2,8 @@
 
 An agentic AI pipeline that takes a ticket short description as input
 and predicts the correct assignment group using semantic search over
-historical tickets and a locally running LLM.
+historical tickets **and KB articles / documents**, combined with a
+locally running LLM.
 
 No ServiceNow connection needed. Runs entirely on your machine.
 
@@ -23,19 +24,20 @@ Embedding Agent  (sentence-transformers all-MiniLM-L6-v2)
         |
         v
 ChromaDB Vector Search
-  Search 1 year of historical tickets stored as embeddings
-  Return top 5 most semantically similar tickets
+  Search historical tickets AND KB articles stored as embeddings
+  Return top 5 most semantically similar results (tickets + docs mixed)
         |
         v
 LLM Agent  (Mistral or Gemma via Ollama - runs locally)
-  Read the 5 similar tickets and their assignment groups
+  Read similar tickets AND relevant KB article chunks
   Reason about which group best fits the new ticket
         |
         v
 Predicted Assignment Group
   + confidence level
-  + which similar tickets matched
+  + which similar tickets / KB articles matched
   + similarity scores
+  + source type ([csv] ticket or [doc] article)
 ```
 
 ---
@@ -45,21 +47,29 @@ Predicted Assignment Group
 ```
 aria/
 |
-|-- predict.py                    <- Run this for the interactive prompt
-|-- build_knowledge_base.py       <- Run once to load CSV into ChromaDB
+|-- predict.py                          <- Run this for the interactive prompt
+|-- build_knowledge_base.py             <- Load CSV tickets into ChromaDB
+|-- build_knowledge_base_docs.py        <- Load KB articles into ChromaDB  (NEW)
 |
 |-- agents/
-|   |-- preprocessing_agent.py   <- Text cleaning
-|   |-- embedding_agent.py       <- Sentence transformer embeddings
-|   |-- knowledge_base_agent.py  <- ChromaDB build and search
-|   |-- llm_agent.py             <- Ollama LLM reasoning
+|   |-- preprocessing_agent.py         <- Text cleaning
+|   |-- embedding_agent.py             <- Sentence transformer embeddings
+|   |-- knowledge_base_agent.py        <- ChromaDB build and search
+|   |-- llm_agent.py                   <- Ollama LLM reasoning
+|   |-- document_ingestion_agent.py    <- KB document reader & chunker  (NEW)
 |
 |-- config/
-|   |-- config.yaml              <- Model settings, assignment groups
+|   |-- config.yaml                    <- Model settings, assignment groups
 |
 |-- data/
-|   |-- training_tickets.csv     <- Your 1-year ServiceNow CSV export
-|   |-- chroma_db/               <- ChromaDB storage (auto-created)
+|   |-- training_tickets.csv           <- Your 1-year ServiceNow CSV export
+|   |-- kb_docs/                       <- KB articles folder  (NEW)
+|   |   |-- vpn_guide.md
+|   |   |-- sap_access_faq.txt
+|   |   |-- network_troubleshooting.pdf
+|   |   |-- IT-Service Desk/           <- Sub-folder = auto team tag
+|   |       |-- password_reset.md
+|   |-- chroma_db/                     <- ChromaDB storage (auto-created)
 |
 |-- requirements.txt
 ```
@@ -105,7 +115,8 @@ ollama                  Python client for local Ollama LLM
 pandas                  CSV reading
 numpy                   numerical operations
 pyyaml                  config file reading
-rich                    terminal output formatting
+pypdf                   PDF document support  (NEW, optional)
+beautifulsoup4          HTML document support (NEW, optional)
 ```
 
 ---
@@ -145,17 +156,9 @@ assignment_group  -> Assignment Team
 ### Step 2 - Update assignment groups in config
 
 Edit config/config.yaml and update the assignment_groups list to match
-your exact ServiceNow group names:
+your exact ServiceNow group names.
 
-```yaml
-assignment_groups:
-  - "IT-SC-EPAM-SAP-AMS-Support"
-  - "IT-SC-EPAM-SAP Basis Support"
-  - "IT-SC-EPAM-SAP Workflow"
-  ...
-```
-
-### Step 3 - Build the knowledge base
+### Step 3 - Build the knowledge base from CSV
 
 Run once. This embeds all CSV tickets into ChromaDB.
 
@@ -163,13 +166,80 @@ Run once. This embeds all CSV tickets into ChromaDB.
 python build_knowledge_base.py
 ```
 
-If you get a new CSV export later, rebuild:
+Supports incremental loading in chunks of 10,000 rows:
+
+```
+python build_knowledge_base.py --start 0     --end 10000
+python build_knowledge_base.py --start 10000 --end 20000
+```
+
+To wipe and rebuild from scratch:
 
 ```
 python build_knowledge_base.py --rebuild
 ```
 
-### Step 4 - Start the interactive prompt
+### Step 4 - Add KB Articles / Documents  (NEW)
+
+Place your knowledge-base articles and runbooks in data/kb_docs/.
+Supported formats: .txt  .md  .pdf  .html
+
+```
+data/kb_docs/
+  vpn_troubleshooting.md
+  sap_password_reset.txt
+  network_guide.pdf
+  IT-Service Desk/          <- folder name = auto team tag
+    onboarding_checklist.md
+```
+
+#### Optional: Tag documents with the target team
+
+Add a team tag on the first line of any document:
+
+```
+TEAM: IT-Network Support
+VPN Troubleshooting Guide
+...
+```
+
+Recognised tag formats:
+```
+TEAM: IT-Service Desk
+Assignment Group: IT-Network Support
+Group: IT-Wintel Support
+```
+
+Or place the file in a sub-folder named after the team — the folder
+name is used as the team tag automatically.
+
+#### Ingest documents into ChromaDB:
+
+```
+python build_knowledge_base_docs.py
+```
+
+With a custom folder:
+```
+python build_knowledge_base_docs.py --docs-path path/to/articles
+```
+
+Wipe existing document chunks and re-ingest:
+```
+python build_knowledge_base_docs.py --rebuild-docs
+```
+
+List what is currently stored:
+```
+python build_knowledge_base_docs.py --list
+```
+
+Documents and CSV tickets share the same ChromaDB collection. Both
+are returned in search results, ranked by semantic similarity. The
+result table shows [csv] for ticket matches and [doc] for article
+matches so you can see the source at a glance.
+
+### Step 5 - Start the interactive prompt
 
 ```
 python predict.py
@@ -198,9 +268,6 @@ Example session:
   Knowledge base   : 1247 tickets loaded
   LLM              : mistral (Ollama running)
 
-  Type a ticket short description to get the assignment group.
-  Type 'exit' to quit.
-
   ----------------------------------------------------------
   Ticket description: VPN not connecting from home office
 
@@ -209,18 +276,18 @@ Example session:
   ==========================================================
 
   Ticket       : VPN not connecting from home office
-  Assignment   : IT-tms-I&O-Identity-Collab-End Point Support
-  Confidence   : HIGH (4 of 5 similar tickets matched)
+  Assignment   : IT-Network Support
+  Confidence   : HIGH (3 of 5 similar tickets matched)
 
-  Similar historical tickets used:
+  Similar historical tickets and KB articles used:
 
-  Rank  Short Description                                   Assignment Group                    Similarity
-  ----- -------------------------------------------------- ----------------------------------- ----------
-  1.    VPN connection dropping after 10 minutes            IT-tms-I&O-Identity-Collab-End P... 0.923  <--
-  2.    SSL VPN certificate error on login page             IT-tms-I&O-Identity-Collab-End P... 0.887  <--
-  3.    IPSec tunnel to partner company dropped             IT-tms-I&O-Identity-Collab-End P... 0.841  <--
-  4.    Cannot reach internal file share from remote office IT-Wintel Support                   0.812
-  5.    Firewall rule blocking new SaaS application         IT-tms-I&O-Identity-Collab-End P... 0.798  <--
+  Rank  Short Description                                 Assignment Group                    Similarity Source
+  ----- ------------------------------------------------ ----------------------------------- ---------- --------
+  1.    VPN connection dropping after 10 minutes          IT-Network Support                  9.2        [csv]  <--
+  2.    VPN Troubleshooting Guide (part 1)                IT-Network Support                  8.9        [doc]  <--
+  3.    SSL VPN certificate error on login page           IT-Network Support                  8.4        [csv]  <--
+  4.    Cannot reach internal file share from remote      IT-Wintel Support                   8.1        [csv]
+  5.    Firewall rule blocking new SaaS application       IT-Network Support                  7.9        [csv]  <--
 ```
 
 ### Single prediction mode (for scripting)
@@ -242,7 +309,7 @@ embedding:
 vector_db:
   path: "data/chroma_db"         # where ChromaDB stores its files
   collection: "snow_tickets"     # collection name
-  top_k: 5                       # how many similar tickets to retrieve
+  top_k: 5                       # how many similar results to retrieve
 
 llm:
   provider: "ollama"
@@ -252,30 +319,62 @@ llm:
 
 data:
   csv_path: "data/training_tickets.csv"
+  docs_path: "data/kb_docs"      # folder with KB articles (NEW)
+
+docs:                            # NEW - document chunking settings
+  chunk_size: 400                # words per chunk
+  chunk_overlap: 80              # overlapping words between chunks
 
 assignment_groups:
   - "IT-SC-EPAM-SAP-AMS-Support"
-  - "IT-SC-EPAM-SAP Basis Support"
-  ...all 23 groups...
+  ...
 ```
 
-### Changing the LLM model
+---
 
-Edit config/config.yaml and change the model field.
+## KB Document Ingestion - How It Works
 
-Then pull the model with Ollama:
+### Supported file types
+
+| Type     | Extension     | Extra library needed         |
+|----------|---------------|------------------------------|
+| Text     | .txt          | none                         |
+| Markdown | .md           | none                         |
+| PDF      | .pdf          | pip install pypdf             |
+| HTML     | .html / .htm  | pip install beautifulsoup4    |
+
+### Chunking
+
+Long articles are automatically split into overlapping chunks so that
+the sentence-transformer model can embed each piece meaningfully.
+
+Default: 400-word chunks with 80-word overlap between consecutive chunks.
+Adjust in config.yaml under the docs: section or via CLI flags:
 
 ```
-ollama pull gemma:2b
+python build_knowledge_base_docs.py --chunk-size 300 --chunk-overlap 60
 ```
 
-Available options:
-```
-mistral       Best accuracy, requires ~4GB RAM
-gemma:2b      Lighter option, requires ~2GB RAM
-llama3.2      Good balance, requires ~2GB RAM
-phi3          Very lightweight, requires ~1.5GB RAM
-```
+### Team tagging
+
+Three ways to associate a document with an assignment group:
+
+1. Front-matter tag on the first line of the file:
+   TEAM: IT-Network Support
+
+2. Sub-folder name:
+   data/kb_docs/IT-Network Support/vpn_guide.md
+
+3. No tag - document is ingested without a team tag.
+   The LLM will still use it as context but cannot use it
+   as a direct team hint.
+
+### Upsert behaviour
+
+Documents use stable IDs derived from filename + chunk index.
+Re-running build_knowledge_base_docs.py without --rebuild-docs
+will upsert - updating existing chunks if content changed, without
+duplicating them.
 
 ---
 
@@ -284,15 +383,16 @@ phi3          Very lightweight, requires ~1.5GB RAM
 Step 1 - Add the group name to config/config.yaml under assignment_groups
 
 Step 2 - Add resolved tickets for that group to data/training_tickets.csv
+         AND/OR add KB articles for that group to data/kb_docs/
 
-Step 3 - Rebuild the knowledge base
+Step 3 - Rebuild
 
 ```
 python build_knowledge_base.py --rebuild
+python build_knowledge_base_docs.py --rebuild-docs
 ```
 
-No model retraining needed. The LLM reasons from the retrieved
-tickets, so new groups are available immediately after rebuild.
+No model retraining needed.
 
 ---
 
@@ -303,7 +403,8 @@ tickets, so new groups are available immediately after rebuild.
 Keyword matching fails on tickets like "user cannot get into the
 system" which means the same as "login failing". Sentence transformers
 understand semantic meaning so similar intent tickets are retrieved
-even when the exact words are different.
+even when the exact words are different. KB articles written in prose
+are found even if the user's ticket uses different terminology.
 
 ### Why ChromaDB
 
@@ -317,22 +418,19 @@ Your ticket data stays on your machine. No data leaves your network.
 Ollama runs Mistral or Gemma locally. No API key, no cost, no
 data privacy concern.
 
-### How the LLM decides
+### How the LLM uses KB articles
 
-The LLM receives:
-- The new ticket description
-- The 5 most similar historical tickets with their assignment groups
-- The full list of 23 valid groups
-
-It must return exactly one group name from the valid list. The
-temperature is set to 0.1 so responses are consistent and deterministic.
+The LLM receives both historical ticket matches AND document chunk
+matches. Document chunks give the LLM extra prose context - for
+example, a runbook saying "VPN issues should be routed to
+IT-Network Support" provides a strong signal even if historical
+ticket matches are sparse.
 
 ### Fallback if Ollama is not running
 
-If Ollama is not available, the system falls back to a majority vote
-from the 5 similar tickets. The most common assignment group among
-them is returned. Confidence is shown as LOW to indicate LLM was
-not used.
+If Ollama is not available, the system falls back to a weighted
+similarity vote from the top-K results (tickets + documents combined).
+Confidence is shown as LOW.
 
 ---
 
@@ -345,35 +443,37 @@ Check the CSV column names match exactly:
 - Description
 - Assignment Team
 
+**No documents found after build_knowledge_base_docs.py**
+
+Check the docs folder exists and contains supported files:
+```
+python build_knowledge_base_docs.py --list
+```
+
+**PDF ingestion fails**
+
+```
+pip install pypdf
+```
+
+**HTML tags appearing in document chunks**
+
+```
+pip install beautifulsoup4
+```
+
 **LLM returning wrong group names**
 
-Ollama may be returning a group name that does not match the list
-exactly. The system does fuzzy matching as a fallback. If this
-happens consistently, check that config.yaml group names exactly
-match what is in your CSV Assignment Team column.
+Check that config.yaml group names exactly match the Assignment Team
+column values in your CSV.
 
 **Ollama not found or model not available**
 
-Make sure Ollama is running:
 ```
 ollama serve
-```
-
-Check the model is downloaded:
-```
 ollama list
-```
-
-Pull it if missing:
-```
 ollama pull mistral
 ```
-
-**Embedding model download slow on first run**
-
-The all-MiniLM-L6-v2 model (~90MB) downloads automatically from
-HuggingFace on the first run and is cached locally. This only
-happens once.
 
 **Out of memory when running Mistral**
 
@@ -383,7 +483,4 @@ llm:
   model: "gemma:2b"
 ```
 
-Then:
-```
-ollama pull gemma:2b
-```
+Then: ollama pull gemma:2b

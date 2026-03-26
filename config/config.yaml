@@ -14,6 +14,11 @@ llm:
 
 data:
   csv_path: "data/training_tickets.csv"
+  docs_path: "data/kb_docs"            # folder containing KB articles / documents
+
+docs:
+  chunk_size: 400                       # words per chunk when splitting documents
+  chunk_overlap: 80                     # word overlap between consecutive chunks
 
 assignment_groups:
 - "IT-OB Operations"

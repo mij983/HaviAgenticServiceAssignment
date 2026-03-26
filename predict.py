@@ -61,19 +61,21 @@ def print_result(result: dict, short_description: str):
     if fallback:
         print("  Note         : LLM unavailable - used weighted similarity vote")
     print("")
-    print("  Similar historical tickets used:")
+    print("  Similar historical tickets and KB articles used:")
     print("")
-    print("  {:<5} {:<50} {:<35} {}".format(
-        "Rank", "Short Description", "Assignment Group", "Similarity (1-10)"))
-    print("  " + "-" * 5 + " " + "-" * 50 + " " + "-" * 35 + " " + "-" * 17)
+    print("  {:<5} {:<48} {:<35} {} {}".format(
+        "Rank", "Short Description", "Assignment Group", "Similarity", "Source"))
+    print("  " + "-" * 5 + " " + "-" * 48 + " " + "-" * 35 + " " + "-" * 10 + " " + "-" * 8)
     for i, t in enumerate(result["similar_tickets"], 1):
         match_marker = " <--" if t["assignment_group"] == group else ""
         sim_display  = "{:.1f}".format(t["similarity_score"])
-        print("  {:<5} {:<50} {:<35} {}{}".format(
+        src_label    = "[doc]" if t.get("source_type") == "document" else "[csv]"
+        print("  {:<5} {:<48} {:<35} {:<10} {}{}".format(
             str(i) + ".",
-            t["short_description"][:49],
+            t["short_description"][:47],
             t["assignment_group"][:34],
             sim_display,
+            src_label,
             match_marker,
         ))
     print("")
@@ -180,6 +182,7 @@ def process_one(user_input: str, config: dict,
     if top_sim < SIMILARITY_THRESHOLD:
         result["assignment_group"] = DEFAULT_GROUP
         result["confidence"]       = "low"
+        result["confidence_score"] = 1
         print_result(result, user_input)
         print("  ⚠  Similarity below " + str(SIMILARITY_THRESHOLD) + "/10 — auto-assigned to: " + DEFAULT_GROUP)
         print("")
