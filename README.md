@@ -14,7 +14,7 @@ No ServiceNow connection needed. Runs entirely on your machine.
 | Feature | Details |
 |---|---|
 | **Azure OpenAI** | Use GPT-4o / GPT-4 / GPT-35-turbo as the LLM instead of local Ollama |
-| **Feedback Loop** | After each prediction, user confirms correct/wrong — saved to feedback.jsonl |
+| **Feedback Loop or Reinforcement Learning from Human Feedback (RLHF)** | After each prediction, user confirms correct/wrong — saved to feedback.jsonl |
 | **KB from feedback** | Confirmed entries are promoted into ChromaDB as new training examples |
 | **Corrections** | Wrong predictions + user-provided correct group also go into KB |
 | **Feedback report** | Per-group accuracy report, export to CSV |
