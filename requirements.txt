@@ -5,11 +5,19 @@
 sentence-transformers>=2.7.0
 faiss-cpu>=1.8.0
 chromadb>=0.5.0
-ollama>=0.2.0
 pandas>=2.0.0
 numpy>=1.26.0
 pyyaml>=6.0.0
 
+# Azure OpenAI (required when llm.provider = "azure_openai")
+openai>=1.30.0            # pip install openai
+
+# .env file loading (recommended for Azure credentials)
+python-dotenv>=1.0.0      # pip install python-dotenv
+
+# Ollama local LLM (required when llm.provider = "ollama")
+ollama>=0.2.0             # pip install ollama
+
 # KB document ingestion (optional but recommended)
-pypdf>=4.0.0          # PDF support  -- pip install pypdf
-beautifulsoup4>=4.12  # HTML support -- pip install beautifulsoup4
+pypdf>=4.0.0              # PDF support   -- pip install pypdf
+beautifulsoup4>=4.12      # HTML support  -- pip install beautifulsoup4

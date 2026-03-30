@@ -1,24 +1,46 @@
 embedding:
-  model: "all-MiniLM-L6-v2" # sentence-transformer model (runs locally, no API key) / Powerfull (nomic-embed-text-v2-moe)
+  model: "all-MiniLM-L6-v2"   # sentence-transformer (runs locally, no API key)
+                                # Powerful alternative: nomic-embed-text-v2-moe
 
 vector_db:
-  path: "data/chroma_db" # ChromaDB persistent storage
-  collection: "snow_tickets" # collection name inside ChromaDB
-  top_k: 5 # how many similar tickets to retrieve
+  path: "data/chroma_db"        # ChromaDB persistent storage
+  collection: "snow_tickets"    # collection name inside ChromaDB
+  top_k: 5                      # how many similar results to retrieve
+
+# ─── LLM Provider ────────────────────────────────────────────────────────────
+# Set provider to "azure_openai" or "ollama"
+#
+# azure_openai:
+#   Requires .env with:
+#     AZURE_OPENAI_ENDPOINT
+#     AZURE_OPENAI_API_KEY
+#     AZURE_OPENAI_API_VERSION
+#     AZURE_OPENAI_DEPLOYMENT
+#
+# ollama:
+#   Runs locally. No API key needed.
+#   Install from https://ollama.com then: ollama pull mistral
+# ─────────────────────────────────────────────────────────────────────────────
 
 llm:
-  provider: "ollama" # ollama runs the LLM locally
-  model: "gemma:2b" # "gemma:2b" for lighter model
-  temperature: 0.1 # low = more deterministic
+  provider: "azure_openai"     # "azure_openai" | "ollama"
+  model: "gpt-4o"              # Azure deployment name OR Ollama model name
+  temperature: 0.1             # low = more deterministic
   max_tokens: 512
 
 data:
   csv_path: "data/training_tickets.csv"
-  docs_path: "data/kb_docs"            # folder containing KB articles / documents
+  docs_path: "data/kb_docs"     # folder containing KB articles / documents
 
 docs:
-  chunk_size: 400                       # words per chunk when splitting documents
-  chunk_overlap: 80                     # word overlap between consecutive chunks
+  chunk_size: 400               # words per chunk when splitting documents
+  chunk_overlap: 80             # word overlap between consecutive chunks
+
+# ─── Feedback Loop ────────────────────────────────────────────────────────────
+feedback:
+  path: "data/feedback.jsonl"   # where feedback entries are stored
+  enabled: true                 # set to false to disable feedback prompts globally
+# ─────────────────────────────────────────────────────────────────────────────
 
 assignment_groups:
 - "IT-OB Operations"
