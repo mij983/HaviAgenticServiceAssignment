@@ -163,7 +163,7 @@ def process_one(user_input: str, config: dict,
         print("")
         print("  Examples:")
         print("    - 'Cannot log in to SAP'")
-        print("    - 'HaviConnect website not loading'")
+        print("    - 'Havi website not loading'")
         print("    - 'Laptop not connecting to VPN'")
         print("")
         print("  " + "=" * 56)
