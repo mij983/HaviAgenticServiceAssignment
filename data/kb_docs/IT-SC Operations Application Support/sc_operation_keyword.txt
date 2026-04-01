@@ -1,0 +1,6 @@
+TEAM: IT-SC Operations Application Support
+Keyword:
+1. Create a user in kisoft
+2. WMS
+3. infor
+4. iLOS ACCESS REVOKE

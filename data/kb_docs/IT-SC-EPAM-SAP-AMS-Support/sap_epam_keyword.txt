@@ -1,0 +1,4 @@
+TEAM: IT-SC-EPAM-SAP-AMS-Support
+Keyword:
+1. Invoice errors SAP
+2. VIM User creation

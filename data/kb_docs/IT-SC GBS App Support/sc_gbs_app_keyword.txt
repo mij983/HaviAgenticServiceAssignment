@@ -1,0 +1,6 @@
+TEAM: IT-SC GBS App Support
+Keyword:
+1. Reqest for new access
+2. ILOS requests
+3. EDI server update
+4. B2Bi ticket

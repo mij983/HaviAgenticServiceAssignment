@@ -1,0 +1,5 @@
+TEAM: IT-SC-EPAM-SAP Workflow
+Keyword:
+1. SAP functional issue
+2. VIM CHANGES or VIM Inquire
+3. BCC Validation tool

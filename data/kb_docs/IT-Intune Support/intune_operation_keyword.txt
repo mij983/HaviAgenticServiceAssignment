@@ -1,0 +1,6 @@
+TEAM: IT-Intune Support
+Keyword:
+1. Make me admin app request
+2. If approved app not available in company portal (Approved software by Intune)
+3. Bitlocker
+4. Device Allocation
