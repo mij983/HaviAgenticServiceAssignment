@@ -441,7 +441,7 @@ class LLMAgent:
         """Check if Ollama is running and the model is available."""
         try:
             models    = ollama.list()
-            available = [m["name"] for m in models.get("models", [])]
+            available = [m.model for m in models.models]
             return any(self.model in m for m in available)
         except Exception:
             return False
