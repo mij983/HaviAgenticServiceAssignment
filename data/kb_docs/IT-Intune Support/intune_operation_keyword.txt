@@ -1,6 +1,51 @@
 TEAM: IT-Intune Support
-Keyword:
-1. Make me admin app request
-2. If approved app not available in company portal (Approved software by Intune)
-3. Bitlocker
-4. Device Allocation
+Common Apps/Issues supported by the group:
+
+Company Portal:
+1. App not available on Company Portal
+2. Not able to install app
+3. On Mac teams and error that company portal app is damaged and can’t be opened.
+4. Company Portal Damaged
+5. Error on opening Company Portal
+
+Windows Update:
+1. windows update fail
+2. missing drivers, error with windows update, user dont have company portal
+3. Laptop doesn't install windows updates
+4. Not able to upgrade the windows
+5. Update keeps failing
+
+Application Issues:
+1. Teams application disappear
+2. Unauthorized access to application remote desktop
+3. Admin Access to Create a Folder within Applications
+4. Upgrade to application latest version
+5. Power Bi Desktop Applications
+6. i have a problem with a Teams application in my phone. I already refreshed my phone, refreshed the appliaction, and it doesnt work
+7. Not able to download the remote desktop application form the browser my old laptop is not working since this morning. when i started it there came an error like
+8. Upgrade to application latest version
+9. MS Office applications end abruptly and without warning
+10. Microsoft Office applications not set for Automatically update to Current Channel
+11. Request to disable authorization by applications
+12. HL-HU | We can't find any downloadable application on portal.manage.microsoft.com
+13. URGENT application icons desktop problem
+14. I've got a problem with accesses to computer drives and company portal to download applications
+15. MICROSOFT APPLICATION TO DO
+16. Dear Team,After motherboard replacement in my laptop I'm getting error C0090016 when I'm tryign to use any of MS application.Please resolve the issue.
+17. we need to be able to update our DELL devices. Please unblock:https://dl.dell.com/FOLDER07870027M/1/Dell-Command-Update-Windows-Universal-Application_PWD0M_WI
+18. Intune - computer: D-J8SSMV2 - motherboard of my computer was replaced and now I don't have authorization to use outlook, teams and office applications
+19. InTune installed machine D-PF2E8JZD Office installation is pending for second day. User cannot do work without office application.Also Teamviewer and workblaze
+20. Applications failed to install
+21. No Microsoft Applications and No Entry to Intranet
+
+Bitlocker:
+1. Need a bitlocker recovery key ASAP
+2. Need my bitlocker My laptop doesn't start without it
+3. URGENT - Bitlocker recovery key needed
+
+Make me admin:
+1. Make Me Admin Not Working
+2. Make Me Admin Rights
+3. Need Make me Admin
+4. Please provide access to Make me admin
+5. Make Me Admin app stopped working
