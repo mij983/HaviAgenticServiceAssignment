@@ -1,6 +1,44 @@
 TEAM: IT-SC GBS App Support
-Keyword:
-1. Reqest for new access
-2. ILOS requests
-3. EDI server update
-4. B2Bi ticket
+Common Apps/Issues supported by the group:
+
+Infor:
+1. Infor - No tour was created in Infor for the following P purchases. Therefore, the goods cannot be invoiced
+2· Infor WMS Application: ILOS/INFOR - PT - PROD - Received messages from Infor got on error.
+3· Open routes in the INFOR
+
+Kisoft:
+1· Difference between ILOS & KISOFT Palletization Full pallet
+2· Connection between ILOS and kisoft
+3· ES Osuna DC kisoft is showing wrong load number
+4· Goods receipt not transferred from KiSoft to Ilos PO #
+5· ES KISOFT ALL DC'S several errors with empties between Kisoft and Ilos.
+
+ILOS:
+1· Route # is not visible
+2· The option to change the warehouse in ILOS has disappeared
+3· Route # exists two times for the same week
+4· when settling a complaint, it automatically prints the stock transaction,
+5· ILOS route must be changed to inransit / en-route to sent x-dock to Infor
+6· Kisoft stock movement doesn't appear in ILOS
+7· I cannot log into ILOS test instances
+
+SAP:
+1· Barcode invoices sent by scanner are not passing to VIM
+2· SAP - ZEDI output not delivered to Archiva - B2Bi configuration
+3· I can't log hours in SAP – CATS
+4· SAP CATS access issue - access to the CATSXT not working
+5· PO not transferred to SAP
+6· SAP invoice error
+
+DIMS:
+1· DIMS error: PCR5-Download from Web
+2· i can't open my account dims mcdo
+3· DIMS ERROR: Printing of Payment Request Form
+4· Can't connect on SVC DIMS
+
+B2Bi:
+1· B2Bi - please resend two dispatch advise
+2· Insert missing customers in B2BI
+3· B2Bi configuration
+4· Update B2Bi
+5· B2Bi: Problems while sending Orders
