@@ -4,17 +4,19 @@ predict.py
 Interactive prompt — type a ticket short description,
 get back the predicted assignment group.
 
-Changes:
-  - Non-IT input is caught and rejected with a clear message
-  - Similarity threshold: if best similarity < 7.0, ticket is
-    automatically assigned to IT-Service Desk (default group)
-    instead of asking the user — ready for future integration
-
-No ServiceNow connection needed. Everything runs locally.
+RLHF integration:
+  - After each prediction, user is asked: "Was this correct? (y/n/skip)"
+  - Feedback is saved to data/rlhf_feedback.jsonl
+  - RLHF reward stats (data/rlhf_rewards.json) are loaded at startup
+    and low-accuracy groups are passed to the LLM as caution hints
+    (Stage 3B — prompt bias injection)
+  - Run python rlhf_train.py --apply --compute-rewards weekly to push
+    feedback into ChromaDB and update reward stats
 
 Usage:
     python predict.py
     python predict.py --once "VPN not connecting from home office"
+    python predict.py --no-rlhf     (disable feedback prompts)
 """
 
 import argparse
@@ -29,11 +31,10 @@ from agents.preprocessing_agent  import PreprocessingAgent
 from agents.embedding_agent       import EmbeddingAgent
 from agents.knowledge_base_agent  import KnowledgeBaseAgent
 from agents.llm_agent             import LLMAgent
+from agents.rlhf_agent            import RLHFAgent
 
-# Similarity score threshold (1-10 scale).
-# If the best match among similar tickets is below this, the prediction
-# is considered low-confidence and the user is asked to confirm.
 SIMILARITY_THRESHOLD = 7.0
+DEFAULT_GROUP        = "IT-Service Desk"
 
 
 def load_config():
@@ -69,7 +70,15 @@ def print_result(result: dict, short_description: str):
     for i, t in enumerate(result["similar_tickets"], 1):
         match_marker = " <--" if t["assignment_group"] == group else ""
         sim_display  = "{:.1f}".format(t["similarity_score"])
-        src_label    = "[doc]" if t.get("source_type") == "document" else "[csv]"
+        src = t.get("source_type", "ticket")
+        if src == "document":
+            src_label = "[doc] "
+        elif src == "rlhf_positive":
+            src_label = "[rlhf+]"
+        elif src == "rlhf_negative_corrected":
+            src_label = "[rlhf~]"
+        else:
+            src_label = "[csv] "
         print("  {:<5} {:<48} {:<35} {:<10} {}{}".format(
             str(i) + ".",
             t["short_description"][:47],
@@ -84,50 +93,38 @@ def print_result(result: dict, short_description: str):
 
 
 def best_similarity(result: dict) -> float:
-    """Return the highest similarity score among the retrieved similar tickets."""
     tickets = result.get("similar_tickets", [])
     if not tickets:
         return 0.0
     return max(t["similarity_score"] for t in tickets)
 
 
-DEFAULT_GROUP = "IT-Service Desk"
-
-
 def run_pipeline(short_description: str, config: dict,
                  embed_agent: EmbeddingAgent,
                  kb_agent: KnowledgeBaseAgent,
                  llm_agent: LLMAgent,
-                 preprocessor: PreprocessingAgent) -> dict:
+                 preprocessor: PreprocessingAgent,
+                 caution_groups: list[str] = None) -> dict:
     """Run the full prediction pipeline for one ticket description."""
-
-    # Step 1 — Preprocess
-    clean_text = preprocessor.process(short_description)
-
-    # Step 2 — Embed
-    query_vector = embed_agent.embed(clean_text)
-
-    # Step 3 — Search knowledge base
+    clean_text      = preprocessor.process(short_description)
+    query_vector    = embed_agent.embed(clean_text)
     top_k           = config["vector_db"]["top_k"]
     similar_tickets = kb_agent.search(query_vector, top_k=top_k)
-
-    # Step 4 — LLM reasoning
-    valid_groups = config["assignment_groups"]
-    result       = llm_agent.predict(
+    valid_groups    = config["assignment_groups"]
+    result          = llm_agent.predict(
         short_description = clean_text,
         similar_tickets   = similar_tickets,
         valid_groups      = valid_groups,
+        caution_groups    = caution_groups or [],
     )
-
     return result
 
 
 def startup_checks(config: dict, kb_agent: KnowledgeBaseAgent,
                    llm_agent: LLMAgent) -> bool:
-    """Verify knowledge base and LLM are ready before starting."""
-    ok = True
-
+    ok    = True
     count = kb_agent.count()
+
     if count == 0:
         print("")
         print("  [ERROR] Knowledge base is empty.")
@@ -148,14 +145,13 @@ def startup_checks(config: dict, kb_agent: KnowledgeBaseAgent,
 
 
 def process_one(user_input: str, config: dict,
-                embed_agent, kb_agent, llm_agent, preprocessor):
-    """
-    Run the pipeline for one input and handle all output logic:
-      - Non-IT input rejection
-      - Low similarity (< SIMILARITY_THRESHOLD) -> auto-assign to DEFAULT_GROUP
-      - Normal result
-    """
-    result = run_pipeline(user_input, config, embed_agent, kb_agent, llm_agent, preprocessor)
+                embed_agent, kb_agent, llm_agent, preprocessor,
+                rlhf_agent=None, caution_groups=None, enable_rlhf=True):
+    """Run the pipeline and handle output + RLHF feedback collection."""
+    result = run_pipeline(
+        user_input, config, embed_agent, kb_agent, llm_agent, preprocessor,
+        caution_groups=caution_groups
+    )
 
     # ── Non-IT input ──────────────────────────────────────────────────────
     if not result.get("is_valid_ticket", True):
@@ -186,32 +182,46 @@ def process_one(user_input: str, config: dict,
         print_result(result, user_input)
         print("  ⚠  Similarity below " + str(SIMILARITY_THRESHOLD) + "/10 — auto-assigned to: " + DEFAULT_GROUP)
         print("")
-        return
+    else:
+        print_result(result, user_input)
 
-    # ── Normal result ─────────────────────────────────────────────────────
-    print_result(result, user_input)
+    # ── RLHF feedback collection ──────────────────────────────────────────
+    if rlhf_agent and enable_rlhf:
+        fb_id = rlhf_agent.record_prediction(user_input, result)
+        rlhf_agent.collect_interactive(
+            fb_id        = fb_id,
+            predicted    = result["assignment_group"],
+            valid_groups = config["assignment_groups"],
+        )
 
 
 def main():
     parser = argparse.ArgumentParser(description="ARIA - Ticket Assignment Predictor")
-    parser.add_argument("--once", type=str, default=None,
+    parser.add_argument("--once",     type=str,  default=None,
                         help="Predict for a single description and exit")
+    parser.add_argument("--no-rlhf",  action="store_true",
+                        help="Disable RLHF feedback prompts")
     args = parser.parse_args()
 
     config = load_config()
+
+    rlhf_cfg      = config.get("rlhf", {})
+    feedback_path = rlhf_cfg.get("feedback_path", "data/rlhf_feedback.jsonl")
+    rewards_path  = rlhf_cfg.get("rewards_path",  "data/rlhf_rewards.json")
+    enable_rlhf   = not args.no_rlhf
 
     print("")
     print("=" * 60)
     print("  ARIA -- Automated Routing and Intelligent Assignment")
     print("=" * 60)
     print("")
-    print("  Embedding model  : " + config["embedding"]["model"])
-    print("  LLM model        : " + config["llm"]["model"] + " via Ollama")
-    print("  Assignment groups: " + str(len(config["assignment_groups"])))
+    print("  Embedding model      : " + config["embedding"]["model"])
+    print("  LLM model            : " + config["llm"]["model"] + " via Ollama")
+    print("  Assignment groups    : " + str(len(config["assignment_groups"])))
     print("  Similarity threshold : " + str(SIMILARITY_THRESHOLD) + "/10")
+    print("  RLHF feedback        : " + ("enabled" if enable_rlhf else "disabled"))
     print("")
 
-    # Initialise agents
     preprocessor = PreprocessingAgent()
 
     embed_agent = EmbeddingAgent(model_name=config["embedding"]["model"])
@@ -227,7 +237,17 @@ def main():
         temperature = config["llm"]["temperature"],
     )
 
-    # Startup checks
+    # Load RLHF reward stats for Stage 3B prompt bias
+    rlhf_agent     = RLHFAgent(feedback_path=feedback_path, rewards_path=rewards_path)
+    caution_groups = rlhf_agent.get_low_reward_groups() if enable_rlhf else []
+
+    if caution_groups:
+        print("  RLHF caution groups  : " + str(len(caution_groups)) +
+              " group(s) flagged (low accuracy from past feedback)")
+        for g in caution_groups:
+            print("    - " + g)
+        print("")
+
     startup_ok = startup_checks(config, kb_agent, llm_agent)
     if not startup_ok:
         sys.exit(1)
@@ -241,7 +261,10 @@ def main():
         if not valid:
             print("  [ERROR] " + err)
             sys.exit(1)
-        process_one(args.once, config, embed_agent, kb_agent, llm_agent, preprocessor)
+        process_one(args.once, config, embed_agent, kb_agent, llm_agent, preprocessor,
+                    rlhf_agent=rlhf_agent if enable_rlhf else None,
+                    caution_groups=caution_groups,
+                    enable_rlhf=enable_rlhf)
         return
 
     # Interactive loop
@@ -266,7 +289,10 @@ def main():
                 print("  [ERROR] " + err)
                 continue
 
-            process_one(user_input, config, embed_agent, kb_agent, llm_agent, preprocessor)
+            process_one(user_input, config, embed_agent, kb_agent, llm_agent, preprocessor,
+                        rlhf_agent=rlhf_agent if enable_rlhf else None,
+                        caution_groups=caution_groups,
+                        enable_rlhf=enable_rlhf)
 
         except KeyboardInterrupt:
             print("")

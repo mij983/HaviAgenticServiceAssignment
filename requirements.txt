@@ -13,3 +13,5 @@ pyyaml>=6.0.0
 # KB document ingestion (optional but recommended)
 pypdf>=4.0.0          # PDF support  -- pip install pypdf
 beautifulsoup4>=4.12  # HTML support -- pip install beautifulsoup4
+
+# RLHF — no extra packages needed (uses stdlib json + existing deps)

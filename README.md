@@ -484,3 +484,90 @@ llm:
 ```
 
 Then: ollama pull gemma:2b
+
+---
+
+## RLHF — Reinforcement Learning from Human Feedback
+
+ARIA now learns from every human correction using a three-stage RLHF loop.
+
+### How it works
+
+```
+Stage 1 — Collect feedback
+  After every prediction:
+    "Was this correct? (y/n/skip)"
+    Saved to data/rlhf_feedback.jsonl
+    y  -> reward +1.0  (confirmed_correct)
+    n  -> reward -1.0  (confirmed_wrong) + user types correct group
+    s  -> skipped
+
+Stage 2 — Compute reward signal
+  python rlhf_train.py --compute-rewards
+  Per-group accuracy tracked in data/rlhf_rewards.json
+  Groups with accuracy < 40% and >= 5 attempts are flagged
+
+Stage 3 — Policy update (two mechanisms)
+
+  3A  Embedding reinforcement
+      python rlhf_train.py --apply
+      confirmed_correct -> upserted into ChromaDB as [rlhf+] positive anchors
+      confirmed_wrong   -> upserted as [rlhf~] correction anchors with correct group
+      Future similar queries rank these entries alongside CSV tickets
+
+  3B  Prompt bias injection  (automatic, no command needed)
+      Low-accuracy groups loaded at predict.py startup from rlhf_rewards.json
+      A CAUTION block is added to the LLM prompt for flagged groups:
+        "Only assign to these groups if similarity >= 8/10"
+      This nudges the LLM away from groups it historically confuses
+```
+
+### Source labels in results table
+
+  [csv]    historical CSV ticket
+  [doc]    KB article chunk
+  [rlhf+]  confirmed-correct RLHF anchor (positive reinforcement)
+  [rlhf~]  human-corrected RLHF anchor (negative correction)
+
+### Weekly workflow
+
+```
+# All week — users give feedback after predictions automatically
+python predict.py
+
+# Weekly — push feedback into KB and update reward stats
+python rlhf_train.py --apply
+python rlhf_train.py --compute-rewards
+
+# Review accuracy report
+python rlhf_train.py --report
+
+# Export feedback log to CSV
+python rlhf_train.py --export data/rlhf_export.csv
+
+# Clean up unrated entries
+python rlhf_train.py --clear-pending
+
+# Disable RLHF prompts for a session
+python predict.py --no-rlhf
+```
+
+### New files added
+
+```
+agents/rlhf_agent.py    — feedback collection, reward computation, KB upsert
+rlhf_train.py           — CLI to apply/report/export RLHF data
+data/rlhf_feedback.jsonl — auto-created, append-only prediction log
+data/rlhf_rewards.json   — auto-created, per-group reward stats
+```
+
+### Configuration (config/config.yaml)
+
+```yaml
+rlhf:
+  feedback_path: "data/rlhf_feedback.jsonl"
+  rewards_path:  "data/rlhf_rewards.json"
+  enabled: true
+  caution_min_attempts: 5    # min predictions before flagging a group
+  caution_max_accuracy: 0.4  # flag groups with accuracy below this threshold
+```

@@ -20,6 +20,15 @@ docs:
   chunk_size: 400 # words per chunk when splitting documents
   chunk_overlap: 80 # word overlap between consecutive chunks
 
+# ─── RLHF — Reinforcement Learning from Human Feedback ───────────────────────
+rlhf:
+  feedback_path: "data/rlhf_feedback.jsonl"  # append-only prediction + feedback log
+  rewards_path:  "data/rlhf_rewards.json"    # per-group reward stats (updated by rlhf_train.py)
+  enabled: true                              # set false to disable feedback prompts globally
+  caution_min_attempts: 5                    # min predictions before flagging a group
+  caution_max_accuracy: 0.4                  # flag groups with accuracy below this
+# ─────────────────────────────────────────────────────────────────────────────
+
 assignment_groups:
 - "IT-OB Operations"
 - "IT-Messaging Support"
