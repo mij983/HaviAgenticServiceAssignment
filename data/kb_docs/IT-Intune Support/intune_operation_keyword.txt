@@ -1,5 +1,5 @@
 TEAM: IT-Intune Support
-Common Apps/Issues supported by the group:
+IT-Intune Support provides support for issues related to Company Portal, Windows update, application issues, app registration, etc. 
 
 Company Portal:
 1. App not available on Company Portal
