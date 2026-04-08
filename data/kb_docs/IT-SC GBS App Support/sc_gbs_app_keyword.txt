@@ -1,5 +1,5 @@
 TEAM: IT-SC GBS App Support
-Common Apps/Issues supported by the group:
+IT-SC GBS App Support provides support for issues related to applications such as Kisoft, Infor, Ilos, SAP, DIMS, B2Bi etc. 
 
 Infor:
 1. Infor - No tour was created in Infor for the following P purchases. Therefore, the goods cannot be invoiced
