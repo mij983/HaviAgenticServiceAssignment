@@ -14,11 +14,11 @@ llm:
 
 data:
   csv_path: "data/training_tickets.csv"
-  docs_path: "data/kb_docs"            # folder containing KB articles / documents
+  docs_path: "data/kb_docs" # folder containing KB articles / documents
 
 docs:
-  chunk_size: 400                       # words per chunk when splitting documents
-  chunk_overlap: 80                     # word overlap between consecutive chunks
+  chunk_size: 400 # words per chunk when splitting documents
+  chunk_overlap: 80 # word overlap between consecutive chunks
 
 assignment_groups:
 - "IT-OB Operations"
@@ -32,7 +32,7 @@ assignment_groups:
 - "IT-Intune Support"
 - "IT-ServiceNow Support"
 - "IT-AVD Support"
-- "IT-Unix/Linux Support"
+- "IT-Unix Linux Support"
 - "IT-SC GBS App Support"
 - "IT-Central-ISM-Essbase"
 - "IT-Security Incident Response"

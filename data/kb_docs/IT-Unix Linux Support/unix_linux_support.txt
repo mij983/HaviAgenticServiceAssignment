@@ -1,0 +1,23 @@
+TEAM: IT-Unix Linux Support
+
+IT-Unix/Linux Support provides support for issues related to High CPU Utilization, High Memory Utilization, High Disk Utilization, node/ service down etc.
+
+High CPU Utilization (Linux Servers — Serious)
+1. *** | *** | High CPU Utilization with Top 10 Processes__LinuxServers - Serious
+
+High Memory Utilization (Linux Servers — Serious)
+1. *** | *** | High Memory Utilization with Top 10 Processes__LinuxServers - Serious
+
+High Disk Utilization (Linux Servers — Warning / Serious)
+1. *** | *** | High Disk Utilization_Linux Servers - Warning
+2. *** | *** | High Disk Utilization_Linux Servers - Serious
+
+Node Down / Node Rebooted
+1. *** | *** | Node is Down
+2. *** | *** | Node has Rebooted
+
+Process / Service Down
+1. *** | *** | HAVI_Linux Process is down
+
+Monitoring Agent / Status
+1. *** | *** | Solarwinds agent Status
