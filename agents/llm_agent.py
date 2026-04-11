@@ -1,17 +1,21 @@
 """
 LLM Agent
 ----------
-Uses a locally running LLM via Ollama to reason over the retrieved
-similar tickets and predict the correct assignment group.
+Uses a locally running LLM via Ollama to reason over retrieved similar
+tickets and predict the correct assignment group.
 
-Changes in this version:
-  - Fixed for ollama >= 0.6.1 (Pydantic response objects)
-  - Stage 3B RLHF prompt bias injection:
-      Groups with low reward scores (computed by RLHFAgent) are passed
-      in as caution_groups. A CAUTION block is added to the LLM prompt
-      telling it to avoid those groups unless evidence is very strong.
-      This implements the policy-update step of the RLHF loop without
-      requiring any model fine-tuning.
+Accuracy improvements in this version:
+  1. Stronger system prompt — explicit few-shot style instructions that
+     work better with smaller models (gemma3:4b, gemma:2b).
+  2. Description context in prompt — the top-3 most similar tickets now
+     include their description snippet (not just short_description).
+     This gives the LLM more evidence to distinguish ambiguous tickets.
+  3. Top-group hint — the weighted-vote winner is shown to the LLM as a
+     suggested answer. The LLM can override it but has a strong anchor.
+  4. gemma4 support — works with any Ollama model including gemma4.
+  5. RLHF Stage 3B prompt bias injection (caution_groups) preserved.
+  6. Fixed for ollama >= 0.6.1 (Pydantic response objects).
+  7. temperature=0.0 by default for fully deterministic output.
 """
 
 import logging
@@ -21,75 +25,48 @@ import ollama
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are an IT service desk routing assistant.
+# ─────────────────────────────────────────────────────────────────────────────
+# System prompt — rewritten for better accuracy with small models
+# ─────────────────────────────────────────────────────────────────────────────
 
-Your job is to read a support ticket and decide which IT team should handle it.
+SYSTEM_PROMPT = """You are an expert IT service desk ticket routing assistant at HAVI.
 
-You will be given:
-1. The ticket short description submitted by the user
-2. Similar historical tickets that were successfully resolved, each showing which team handled it
-3. Relevant KB articles / documents that may contain routing guidance
-4. A list of all valid assignment groups
+Your ONLY job is to read a support ticket and output the correct assignment group name.
 
-STRICT RULES — follow every rule without exception:
+CRITICAL INSTRUCTIONS:
 
-RULE 1 — VALID IT TICKET CHECK:
-  Before doing anything else, decide: is this a genuine IT support ticket?
-  A valid IT ticket describes a technical problem, system issue, access issue,
-  software/hardware fault, network problem, or any IT-related service request.
+1. OUTPUT FORMAT
+   Output EXACTLY ONE line: the assignment group name, nothing else.
+   No explanation. No "I think". No punctuation after the name. Just the name.
 
-  If the input is NOT a valid IT ticket — for example: personal matters,
-  medical issues, greetings, random words, nonsense sentences, or anything
-  clearly unrelated to IT support — respond with exactly:
-    NOT_IT_TICKET
-  and nothing else.
+2. NOT AN IT TICKET
+   If the input is not a real IT support ticket (e.g. random words, greetings,
+   personal matters), output exactly: NOT_IT_TICKET
 
-RULE 2 — RESPOND ONLY WITH THE GROUP NAME:
-  If it IS a valid IT ticket, respond with ONLY the assignment group name.
-  No explanation. No punctuation. No bullet points. No extra text whatsoever.
+3. USE THE EVIDENCE
+   You will see similar historical tickets with their correct assignment groups.
+   The ticket marked [TOP-VOTE] is the statistical best match — trust it unless
+   another group has significantly stronger similarity scores.
 
-RULE 3 — ONLY USE GROUPS FROM THE VALID LIST:
-  The assignment group MUST be exactly one from the valid list provided.
-  Do NOT invent or create group names that are not in the list.
-  Do NOT combine or shorten group names.
-  Copy the group name exactly — character for character.
+4. EXACT GROUP NAME
+   Copy the group name character-for-character from the VALID ASSIGNMENT GROUPS list.
+   Never invent, shorten, or paraphrase a group name.
 
-RULE 4 — BASE DECISIONS ON EVIDENCE ONLY:
-  Only predict a group if the similar historical tickets support that decision.
-  Weight higher-similarity tickets more heavily.
-  Do NOT assume a group based on general knowledge if the evidence does not support it.
-
-RULE 5 — WHEN EVIDENCE IS SPLIT:
-  If the similar tickets point to multiple groups with similar weight,
-  pick the single group that has the highest combined similarity score.
-  Still respond with ONLY that one group name.
-
-RULE 6 — NO HALLUCINATION:
-  Never make up ticket details, group names, or reasoning.
-  Never output anything except a valid group name from the list OR NOT_IT_TICKET.
+5. WHEN UNSURE
+   Pick the group with the most and highest-similarity matching tickets.
+   Default to IT-Service Desk only if NO evidence points to any other group.
 """
 
-VALIDATION_PROMPT = """You are an IT ticket validator.
-
-Decide if the following text is a genuine IT support ticket.
-
-A genuine IT ticket describes: a technical problem, system error, login or access
-issue, software or hardware fault, network issue, or any IT-related service request.
-
-NOT a genuine IT ticket: personal problems, medical issues, greetings, random words,
-nonsense text, questions about non-IT topics, or anything unrelated to IT support.
-
-Respond with exactly one word — YES or NO:
-  YES  — if it is a genuine IT support ticket
-  NO   — if it is not a genuine IT support ticket
-
-Text:
-"""
+VALIDATION_PROMPT = """Is the following text a genuine IT support ticket?
+A genuine IT ticket describes a technical problem, system issue, access issue,
+software/hardware fault, or IT service request.
+Reply with YES or NO only.
+Text: """
 
 
 class LLMAgent:
 
-    def __init__(self, model: str = "gemma:2b", temperature: float = 0.1):
+    def __init__(self, model: str = "gemma3:4b", temperature: float = 0.0):
         self.model       = model
         self.temperature = temperature
 
@@ -102,28 +79,8 @@ class LLMAgent:
         short_description: str,
         similar_tickets:   list[dict],
         valid_groups:      list[str],
-        caution_groups:    list[str] = None,   # Stage 3B RLHF bias injection
+        caution_groups:    list[str] = None,
     ) -> dict:
-        """
-        Ask the LLM to predict the assignment group.
-
-        Args:
-            caution_groups: groups flagged as low-accuracy by RLHF reward stats.
-                            A caution hint is injected into the prompt for these.
-
-        Returns:
-            {
-                "is_valid_ticket":  True / False,
-                "assignment_group": str or None,
-                "confidence":       "high" / "medium" / "low",
-                "confidence_score": int 1-10,
-                "match_count":      int,
-                "top_k":            int,
-                "raw_llm_response": str,
-                "similar_tickets":  list[dict],
-                "fallback":         bool,
-            }
-        """
         prompt = self._build_prompt(
             short_description, similar_tickets, valid_groups,
             caution_groups=caution_groups or []
@@ -155,8 +112,9 @@ class LLMAgent:
                 logger.warning(
                     "LLM returned unrecognised group '%s'. Using weighted fallback.", raw_answer
                 )
-                return self._weighted_vote_result(similar_tickets, valid_groups,
-                                                  llm_raw=raw_answer)
+                return self._weighted_vote_result(
+                    similar_tickets, valid_groups, llm_raw=raw_answer
+                )
 
             match_count, confidence_score, confidence_label = self._score(
                 predicted, similar_tickets
@@ -175,7 +133,9 @@ class LLMAgent:
 
         except Exception as e:
             logger.error("LLM error: %s", e)
-            return self._weighted_vote_result(similar_tickets, valid_groups, error=str(e))
+            return self._weighted_vote_result(
+                similar_tickets, valid_groups, error=str(e)
+            )
 
     # ─────────────────────────────────────────────────────────────────────────
     # Non-IT input detection
@@ -188,7 +148,6 @@ class LLMAgent:
                 options  = {"temperature": 0.0},
                 messages = [{"role": "user", "content": VALIDATION_PROMPT + text}],
             )
-            # ollama >= 0.6.1
             answer = response.message.content.strip().upper()
             return answer.startswith("NO")
         except Exception:
@@ -259,12 +218,6 @@ class LLMAgent:
             weight = t.get("similarity_raw", t["similarity_score"])
             weighted_votes[t["assignment_group"]] += weight
 
-        if weighted_votes:
-            logger.debug("Weighted vote breakdown:")
-            total = sum(weighted_votes.values())
-            for grp, w in sorted(weighted_votes.items(), key=lambda x: -x[1]):
-                logger.debug("  %-40s %.3f  (%.1f%%)", grp, w, 100 * w / total)
-
         predicted = (
             max(weighted_votes, key=weighted_votes.__getitem__)
             if weighted_votes else valid_groups[0]
@@ -287,7 +240,9 @@ class LLMAgent:
         }
 
     # ─────────────────────────────────────────────────────────────────────────
-    # Prompt builder — includes Stage 3B RLHF caution hint
+    # Prompt builder
+    # Accuracy improvement: includes description snippets for top matches,
+    # shows weighted-vote top group as a [TOP-VOTE] anchor hint to the LLM.
     # ─────────────────────────────────────────────────────────────────────────
 
     def _build_prompt(
@@ -297,16 +252,27 @@ class LLMAgent:
         valid_groups:      list[str],
         caution_groups:    list[str] = None,
     ) -> str:
-        prompt  = "NEW TICKET:\n"
+
+        # Compute weighted-vote winner to show as anchor hint
+        weighted_votes = defaultdict(float)
+        for t in similar_tickets:
+            weight = t.get("similarity_raw", t["similarity_score"])
+            weighted_votes[t["assignment_group"]] += weight
+        top_vote = (
+            max(weighted_votes, key=weighted_votes.__getitem__)
+            if weighted_votes else ""
+        )
+
+        prompt  = "TICKET TO ROUTE:\n"
         prompt += short_description + "\n\n"
 
         hist_tickets = [t for t in similar_tickets
-                        if t.get("source_type", "ticket") in ("ticket", "rlhf_positive",
-                                                               "rlhf_negative_corrected")]
+                        if t.get("source_type", "ticket") in (
+                            "ticket", "rlhf_positive", "rlhf_negative_corrected")]
         doc_chunks   = [t for t in similar_tickets if t.get("source_type") == "document"]
 
         if hist_tickets:
-            prompt += "SIMILAR HISTORICAL TICKETS (ranked by similarity, highest first):\n"
+            prompt += "SIMILAR HISTORICAL TICKETS (highest similarity first):\n"
             for i, ticket in enumerate(hist_tickets, 1):
                 src = ticket.get("source_type", "ticket")
                 tag = ""
@@ -314,39 +280,47 @@ class LLMAgent:
                     tag = " [confirmed-correct]"
                 elif src == "rlhf_negative_corrected":
                     tag = " [human-corrected]"
+                elif ticket["assignment_group"] == top_vote and i == 1:
+                    tag = " [TOP-VOTE]"
+
                 prompt += (
-                    str(i) + ". [" + ticket["assignment_group"] + "] "
-                    + ticket["short_description"]
-                    + " (similarity: " + str(ticket["similarity_score"]) + "/10)"
-                    + tag + "\n"
+                    str(i) + ". [" + ticket["assignment_group"] + "]"
+                    + tag + " sim=" + str(ticket["similarity_score"]) + "/10\n"
+                    + "   Title: " + ticket["short_description"] + "\n"
                 )
+                # Include description for top 3 tickets — gives LLM richer evidence
+                if i <= 3 and ticket.get("description", "").strip():
+                    desc_snippet = ticket["description"][:200].strip()
+                    prompt += "   Detail: " + desc_snippet + "\n"
             prompt += "\n"
 
         if doc_chunks:
-            prompt += "RELEVANT KB ARTICLES / DOCUMENTS:\n"
+            prompt += "RELEVANT KB ARTICLES:\n"
             for i, chunk in enumerate(doc_chunks, 1):
-                team_hint = (" -> " + chunk["assignment_group"]) if chunk["assignment_group"] else ""
+                team_hint = (" => " + chunk["assignment_group"]) if chunk["assignment_group"] else ""
                 prompt += (
-                    str(i) + ". [" + chunk["short_description"] + "]" + team_hint + "\n"
+                    str(i) + ". [" + chunk["short_description"] + "]" + team_hint
+                    + " sim=" + str(chunk["similarity_score"]) + "/10\n"
                     + "   " + chunk["description"][:300] + "\n"
-                    + "   (similarity: " + str(chunk["similarity_score"]) + "/10)\n"
                 )
             prompt += "\n"
 
-        # ── Stage 3B: RLHF caution hint ──────────────────────────────────────
+        # Stage 3B RLHF caution hint
         if caution_groups:
-            prompt += "CAUTION — LOW ACCURACY GROUPS (human feedback flagged these):\n"
-            prompt += "The following groups have been frequently mis-predicted in the past.\n"
-            prompt += "Only assign to these groups if the evidence is very strong (similarity >= 8/10):\n"
+            prompt += "CAUTION — FREQUENTLY WRONG GROUPS (from human feedback):\n"
+            prompt += "Only use these if similarity is >= 8/10:\n"
             for g in caution_groups:
                 prompt += "  - " + g + "\n"
             prompt += "\n"
+
+        if top_vote:
+            prompt += "STATISTICAL SUGGESTION (weighted similarity vote): " + top_vote + "\n\n"
 
         prompt += "VALID ASSIGNMENT GROUPS:\n"
         for group in valid_groups:
             prompt += "- " + group + "\n"
 
-        prompt += "\nRespond with ONLY the assignment group name (or NOT_IT_TICKET if not an IT issue):"
+        prompt += "\nOutput ONLY the assignment group name (or NOT_IT_TICKET):"
         return prompt
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -354,6 +328,8 @@ class LLMAgent:
     # ─────────────────────────────────────────────────────────────────────────
 
     def _validate(self, raw: str, valid_groups: list[str]) -> str | None:
+        # Strip any accidental punctuation the model may add
+        raw = raw.strip().strip(".,;:\"'")
         if raw in valid_groups:
             return raw
         raw_lower = raw.lower()
@@ -366,13 +342,13 @@ class LLMAgent:
         return None
 
     # ─────────────────────────────────────────────────────────────────────────
-    # Health check
+    # Health check — supports all Ollama models including gemma4
     # ─────────────────────────────────────────────────────────────────────────
 
     def is_available(self) -> bool:
-        """Check if Ollama is running and the model is available."""
+        """Check if Ollama is running and the configured model is available."""
         try:
-            # ollama >= 0.6.1: returns ListResponse Pydantic object
+            # ollama >= 0.6.1 returns ListResponse Pydantic object
             response  = ollama.list()
             available = [m.model for m in response.models]
             return any(self.model in m for m in available)

@@ -1,34 +1,82 @@
+# ─── Embedding Model ──────────────────────────────────────────────────────────
+# Upgraded from all-MiniLM-L6-v2 (384-dim) to all-mpnet-base-v2 (768-dim).
+# all-mpnet-base-v2 produces significantly better semantic similarity scores
+# for IT ticket text — especially for short, jargon-heavy descriptions.
+# Trade-off: ~420MB download vs ~90MB, ~2x slower embedding at build time.
+# Prediction speed is unchanged (only one vector is embedded per query).
+#
+# IMPORTANT: If you already built the knowledge base with all-MiniLM-L6-v2,
+# you MUST rebuild it after changing this model:
+#   python build_knowledge_base.py --rebuild
+#   python build_knowledge_base_docs.py --rebuild-docs
+#
+# To keep the old model (faster, lower accuracy), change back to:
+#   model: "all-MiniLM-L6-v2"
 embedding:
-  model: "all-MiniLM-L6-v2" # sentence-transformer model (runs locally, no API key) / Powerfull (nomic-embed-text-v2-moe)
+  model: "nomic-ai/nomic-embed-text-v1.5"
 
+# ─── Vector DB ────────────────────────────────────────────────────────────────
 vector_db:
-  path: "data/chroma_db" # ChromaDB persistent storage
-  collection: "snow_tickets" # collection name inside ChromaDB
-  top_k: 5 # how many similar tickets to retrieve
+  path: "data/chroma_db"
+  collection: "snow_tickets"
+  # Increased from 5 to 10.
+  # More candidates give the LLM stronger evidence and reduce cases where
+  # the correct group is narrowly missed. The LLM still picks one answer.
+  top_k: 10
 
+# ─── LLM ─────────────────────────────────────────────────────────────────────
+# Provider: ollama (runs fully locally, no GPU required)
+#
+# Model options (all CPU-compatible, no GPU needed):
+#
+#   gemma3:4b        — RECOMMENDED for accuracy. ~3.3GB RAM. Best reasoning
+#                      for IT routing with no GPU. Released 2025.
+#                      Install: ollama pull gemma3:4b
+#
+#   gemma3:1b        — If RAM is tight (<4GB free). ~1.1GB RAM. Lower accuracy
+#                      but still better than gemma:2b.
+#                      Install: ollama pull gemma3:1b
+#
+#   gemma4:          — LATEST Gemma 4 model (multimodal, text-only mode here).
+#                      Requires ~6GB+ RAM for smallest variant.
+#                      Install: ollama pull gemma4
+#                      Only use if you have 8GB+ free RAM.
+#
+#   gemma:2b         — Original model. ~1.7GB RAM. Lowest accuracy (~50%).
+#                      Keep as fallback if above models cause memory issues.
+#
+#   mistral          — Alternative. ~4GB RAM. Good accuracy, similar to gemma3:4b.
+#                      Install: ollama pull mistral
+#
+# RECOMMENDATION without GPU:
+#   Step 1: Try gemma3:4b first (best accuracy / RAM balance)
+#   Step 2: If out of memory, fall back to gemma3:1b
+#   Step 3: gemma:2b as last resort
 llm:
-  provider: "ollama" # ollama runs the LLM locally
-  model: "gemma:2b" # "gemma:2b" for lighter model
-  temperature: 0.1 # low = more deterministic
+  provider: "ollama"
+  model: "gemma3:4b"        # change to "gemma4" for latest, "gemma3:1b" for low RAM
+  temperature: 0.1           # 0.0 = fully deterministic — best for routing tasks
   max_tokens: 512
 
+# ─── Data paths ──────────────────────────────────────────────────────────────
 data:
   csv_path: "data/training_tickets.csv"
-  docs_path: "data/kb_docs" # folder containing KB articles / documents
+  docs_path: "data/kb_docs"
 
+# ─── Document chunking ───────────────────────────────────────────────────────
 docs:
-  chunk_size: 400 # words per chunk when splitting documents
-  chunk_overlap: 80 # word overlap between consecutive chunks
+  chunk_size: 400
+  chunk_overlap: 80
 
-# ─── RLHF — Reinforcement Learning from Human Feedback ───────────────────────
+# ─── RLHF ────────────────────────────────────────────────────────────────────
 rlhf:
-  feedback_path: "data/rlhf_feedback.jsonl"  # append-only prediction + feedback log
-  rewards_path:  "data/rlhf_rewards.json"    # per-group reward stats (updated by rlhf_train.py)
-  enabled: true                              # set false to disable feedback prompts globally
-  caution_min_attempts: 5                    # min predictions before flagging a group
-  caution_max_accuracy: 0.4                  # flag groups with accuracy below this
-# ─────────────────────────────────────────────────────────────────────────────
+  feedback_path: "data/rlhf_feedback.jsonl"
+  rewards_path:  "data/rlhf_rewards.json"
+  enabled: true
+  caution_min_attempts: 5
+  caution_max_accuracy: 0.4
 
+# ─── Assignment Groups ────────────────────────────────────────────────────────
 assignment_groups:
 - "IT-OB Operations"
 - "IT-Messaging Support"

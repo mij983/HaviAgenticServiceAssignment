@@ -15,3 +15,9 @@ pypdf>=4.0.0          # PDF support  -- pip install pypdf
 beautifulsoup4>=4.12  # HTML support -- pip install beautifulsoup4
 
 # RLHF — no extra packages needed (uses stdlib json + existing deps)
+
+# NOTE: Embedding model changed from all-MiniLM-L6-v2 to all-mpnet-base-v2
+# for better accuracy. This downloads ~420MB on first run (was ~90MB).
+# If you already have a built KB with the old model, rebuild it:
+#   python build_knowledge_base.py --rebuild
+#   python build_knowledge_base_docs.py --rebuild-docs

@@ -1,7 +1,7 @@
 """
 install.py
 -----------
-Run this instead of pip install -r requirements.txt
+Run this instead of pip install -r requirements.txt.
 
 Installs CPU-only PyTorch first (small download ~180MB)
 then installs the rest of the packages.
@@ -38,7 +38,6 @@ def main():
     print("  This avoids downloading the 2GB GPU version.")
     print("")
 
-    # Step 1 — CPU-only torch (must come first)
     run(
         [
             sys.executable, "-m", "pip", "install",
@@ -53,7 +52,6 @@ def main():
     print("  Step 2/2: Installing remaining packages")
     print("")
 
-    # Step 2 — everything else
     packages = [
         "sentence-transformers>=2.7.0",
         "faiss-cpu>=1.8.0",
@@ -77,8 +75,19 @@ def main():
     print("")
     print("  Next steps:")
     print("")
-    print("  1. Install Ollama from https://ollama.com")
-    print("     Then run:  ollama pull gemma:2b")
+    print("  1. Pull the recommended LLM model (no GPU needed):")
+    print("")
+    print("     RECOMMENDED — best accuracy without GPU:")
+    print("       ollama pull gemma3:4b")
+    print("")
+    print("     LATEST — Gemma 4 (needs ~6GB+ free RAM):")
+    print("       ollama pull gemma4")
+    print("")
+    print("     LOW RAM fallback (if gemma3:4b causes memory errors):")
+    print("       ollama pull gemma3:1b")
+    print("")
+    print("     Original fallback:")
+    print("       ollama pull gemma:2b")
     print("")
     print("  2. Add your 1 year ServiceNow CSV to:")
     print("     data/training_tickets.csv")
@@ -87,7 +96,10 @@ def main():
     print("  3. Build the knowledge base:")
     print("     python build_knowledge_base.py")
     print("")
-    print("  4. Start predicting:")
+    print("  4. (Optional) Ingest KB articles:")
+    print("     python build_knowledge_base_docs.py")
+    print("")
+    print("  5. Start predicting:")
     print("     python predict.py")
     print("")
 

@@ -36,7 +36,7 @@ class EmbeddingAgent:
         Model is cached to models/ folder so it downloads only once.
         """
         print("  Loading embedding model: " + self.model_name)
-        self.model = SentenceTransformer(self.model_name, cache_folder="models/")
+        self.model = SentenceTransformer(self.model_name, cache_folder="models/", trust_remote_code=True)
         print("  Embedding model ready.")
 
     def embed(self, text: str) -> list[float]:

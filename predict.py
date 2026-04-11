@@ -139,7 +139,8 @@ def startup_checks(config: dict, kb_agent: KnowledgeBaseAgent,
     else:
         print("  LLM              : [WARNING] Ollama not running or model not found")
         print("                     Predictions will use weighted similarity vote fallback")
-        print("                     To enable LLM: ollama pull " + config["llm"]["model"])
+        print("                     Recommended: ollama pull gemma3:4b")
+        print("                     Or try:      ollama pull " + config["llm"]["model"])
 
     return ok
 
@@ -217,6 +218,8 @@ def main():
     print("")
     print("  Embedding model      : " + config["embedding"]["model"])
     print("  LLM model            : " + config["llm"]["model"] + " via Ollama")
+    print("  Temperature          : " + str(config["llm"]["temperature"]) + " (0.0 = fully deterministic)")
+    print("  Top-K results        : " + str(config["vector_db"]["top_k"]))
     print("  Assignment groups    : " + str(len(config["assignment_groups"])))
     print("  Similarity threshold : " + str(SIMILARITY_THRESHOLD) + "/10")
     print("  RLHF feedback        : " + ("enabled" if enable_rlhf else "disabled"))
