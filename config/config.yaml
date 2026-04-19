@@ -13,7 +13,7 @@
 # To keep the old model (faster, lower accuracy), change back to:
 #   model: "all-MiniLM-L6-v2"
 embedding:
-  model: "nomic-ai/nomic-embed-text-v1.5"
+  model: "all-mpnet-base-v2"
 
 # ─── Vector DB ────────────────────────────────────────────────────────────────
 vector_db:
@@ -22,7 +22,7 @@ vector_db:
   # Increased from 5 to 10.
   # More candidates give the LLM stronger evidence and reduce cases where
   # the correct group is narrowly missed. The LLM still picks one answer.
-  top_k: 10
+  top_k: 5
 
 # ─── LLM ─────────────────────────────────────────────────────────────────────
 # Provider: ollama (runs fully locally, no GPU required)
@@ -54,8 +54,8 @@ vector_db:
 #   Step 3: gemma:2b as last resort
 llm:
   provider: "ollama"
-  model: "gemma3:4b"        # change to "gemma4" for latest, "gemma3:1b" for low RAM
-  temperature: 0.1           # 0.0 = fully deterministic — best for routing tasks
+  model: "gemma2:2b" # change to "gemma4" for latest, "gemma3:1b" for low RAM
+  temperature: 0.1 # 0.0 = fully deterministic — best for routing tasks
   max_tokens: 512
 
 # ─── Data paths ──────────────────────────────────────────────────────────────
@@ -71,7 +71,7 @@ docs:
 # ─── RLHF ────────────────────────────────────────────────────────────────────
 rlhf:
   feedback_path: "data/rlhf_feedback.jsonl"
-  rewards_path:  "data/rlhf_rewards.json"
+  rewards_path: "data/rlhf_rewards.json"
   enabled: true
   caution_min_attempts: 5
   caution_max_accuracy: 0.4
