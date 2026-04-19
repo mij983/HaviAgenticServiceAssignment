@@ -16,6 +16,7 @@ Accuracy improvements in this version:
   5. RLHF Stage 3B prompt bias injection (caution_groups) preserved.
   6. Fixed for ollama >= 0.6.1 (Pydantic response objects).
   7. temperature=0.0 by default for fully deterministic output.
+  8. Broadened IT ticket definition — security/spam/phishing now included.
 """
 
 import logging
@@ -26,7 +27,7 @@ import ollama
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# System prompt — rewritten for better accuracy with small models
+# System prompt
 # ─────────────────────────────────────────────────────────────────────────────
 
 SYSTEM_PROMPT = """You are an expert IT service desk ticket routing assistant at HAVI.
@@ -40,8 +41,20 @@ CRITICAL INSTRUCTIONS:
    No explanation. No "I think". No punctuation after the name. Just the name.
 
 2. NOT AN IT TICKET
-   If the input is not a real IT support ticket (e.g. random words, greetings,
-   personal matters), output exactly: NOT_IT_TICKET
+   Only output NOT_IT_TICKET if the input is completely unrelated to IT —
+   for example: random words, greetings, personal matters, or gibberish.
+
+   The following ARE valid IT tickets — do NOT reject them:
+   - Spam email, phishing email, suspicious email, junk mail
+   - Virus, malware, ransomware, suspicious attachment
+   - Email not working, mailbox full, Outlook issues
+   - Password reset, account locked, access denied
+   - VPN issues, network connectivity, Wi-Fi problems
+   - Software installation, hardware fault, printer issues
+   - SAP, HaviConnect, or any business application issues
+   - Any security incident or cyber threat report
+
+   When in doubt, route the ticket — do NOT reject it.
 
 3. USE THE EVIDENCE
    You will see similar historical tickets with their correct assignment groups.
@@ -59,7 +72,7 @@ CRITICAL INSTRUCTIONS:
 
 VALIDATION_PROMPT = """Is the following text a genuine IT support ticket?
 A genuine IT ticket describes a technical problem, system issue, access issue,
-software/hardware fault, or IT service request.
+software/hardware fault, security incident, spam/phishing email, or IT service request.
 Reply with YES or NO only.
 Text: """
 
@@ -103,8 +116,6 @@ class LLMAgent:
                 return self._invalid_ticket_result(similar_tickets, raw_answer)
 
             if not self._looks_like_group(raw_answer, valid_groups):
-                # if self._is_non_it_input(short_description):
-                #     return self._invalid_ticket_result(similar_tickets, raw_answer)
                 return self._weighted_vote_result(
                     similar_tickets, valid_groups, llm_raw=raw_answer
                 )
@@ -246,8 +257,8 @@ class LLMAgent:
 
     # ─────────────────────────────────────────────────────────────────────────
     # Prompt builder
-    # Accuracy improvement: includes description snippets for top matches,
-    # shows weighted-vote top group as a [TOP-VOTE] anchor hint to the LLM.
+    # KB documents are listed FIRST, then historical tickets.
+    # This ensures the LLM reads authoritative KB context before ticket evidence.
     # ─────────────────────────────────────────────────────────────────────────
 
     def _build_prompt(
@@ -276,8 +287,21 @@ class LLMAgent:
                             "ticket", "rlhf_positive", "rlhf_negative_corrected")]
         doc_chunks   = [t for t in similar_tickets if t.get("source_type") == "document"]
 
+        # ── KB documents FIRST — authoritative context before ticket evidence ──
+        if doc_chunks:
+            prompt += "RELEVANT KB ARTICLES (read these first):\n"
+            for i, chunk in enumerate(doc_chunks, 1):
+                team_hint = (" => " + chunk["assignment_group"]) if chunk["assignment_group"] else ""
+                prompt += (
+                    str(i) + ". [" + chunk["short_description"] + "]" + team_hint
+                    + " sim=" + str(chunk["similarity_score"]) + "/10\n"
+                    + "   " + chunk["description"][:300] + "\n"
+                )
+            prompt += "\n"
+
+        # ── Historical tickets SECOND — cross-verification ─────────────────────
         if hist_tickets:
-            prompt += "SIMILAR HISTORICAL TICKETS (highest similarity first):\n"
+            prompt += "SIMILAR HISTORICAL TICKETS (cross-verify with KB above):\n"
             for i, ticket in enumerate(hist_tickets, 1):
                 src = ticket.get("source_type", "ticket")
                 tag = ""
@@ -293,21 +317,10 @@ class LLMAgent:
                     + tag + " sim=" + str(ticket["similarity_score"]) + "/10\n"
                     + "   Title: " + ticket["short_description"] + "\n"
                 )
-                # Include description for top 3 tickets — gives LLM richer evidence
+                # Include description for top 3 tickets
                 if i <= 3 and ticket.get("description", "").strip():
                     desc_snippet = ticket["description"][:200].strip()
                     prompt += "   Detail: " + desc_snippet + "\n"
-            prompt += "\n"
-
-        if doc_chunks:
-            prompt += "RELEVANT KB ARTICLES:\n"
-            for i, chunk in enumerate(doc_chunks, 1):
-                team_hint = (" => " + chunk["assignment_group"]) if chunk["assignment_group"] else ""
-                prompt += (
-                    str(i) + ". [" + chunk["short_description"] + "]" + team_hint
-                    + " sim=" + str(chunk["similarity_score"]) + "/10\n"
-                    + "   " + chunk["description"][:300] + "\n"
-                )
             prompt += "\n"
 
         # Stage 3B RLHF caution hint
@@ -358,4 +371,5 @@ class LLMAgent:
             available = [m.model for m in response.models]
             return any(self.model in m for m in available)
         except Exception:
+
             return False
