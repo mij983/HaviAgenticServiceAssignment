@@ -29,6 +29,11 @@ Similarity scores:
   Raw cosine similarity (0-1) is scaled to 1-10 for display.
   The raw value is preserved as similarity_raw for weighted-vote math
   in the LLM agent.
+
+Search order:
+  search() returns KB document chunks FIRST, then historical tickets.
+  This ensures the LLM prompt reads authoritative KB context before
+  cross-verifying with ticket evidence.
 """
 
 import csv
@@ -168,8 +173,12 @@ class KnowledgeBaseAgent:
 
     def search(self, query_embedding: list[float], top_k: int = 5) -> list[dict]:
         """
-        Find the top-K most similar entries (tickets OR document chunks)
-        to the query embedding.
+        Find the top-K most similar entries (tickets OR document chunks).
+
+        Results are sorted so KB document chunks appear FIRST, followed by
+        historical tickets. Within each group, ordering is by similarity
+        score descending. This ensures the LLM prompt reads KB context
+        before cross-verifying with ticket evidence.
 
         Returns list of dicts with:
           short_description : str
@@ -206,7 +215,17 @@ class KnowledgeBaseAgent:
                 "file_name":         meta.get("file_name", ""),
             })
 
-        return tickets
+        # ── Sort: KB documents first, then tickets — both by similarity desc ──
+        doc_results    = sorted(
+            [t for t in tickets if t["source_type"] == "document"],
+            key=lambda x: x["similarity_raw"], reverse=True
+        )
+        ticket_results = sorted(
+            [t for t in tickets if t["source_type"] != "document"],
+            key=lambda x: x["similarity_raw"], reverse=True
+        )
+
+        return doc_results + ticket_results
 
     def count(self) -> int:
         """Return number of tickets in the knowledge base."""
