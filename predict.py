@@ -22,6 +22,7 @@ Usage:
 import argparse
 import os
 import sys
+import time
 
 import yaml
 
@@ -42,7 +43,7 @@ def load_config():
         return yaml.safe_load(f)
 
 
-def print_result(result: dict, short_description: str):
+def print_result(result: dict, short_description: str, elapsed: float = 0.0):
     group            = result["assignment_group"]
     confidence       = result["confidence"].upper()
     confidence_score = result.get("confidence_score", "N/A")
@@ -59,6 +60,7 @@ def print_result(result: dict, short_description: str):
     print("  Assignment   : " + group)
     print("  Confidence   : " + confidence + "  |  Score: " + str(confidence_score) + "/10"
           + "  (" + str(matches) + " of " + str(top_k) + " similar tickets matched)")
+    print("  Time taken   : {:.2f}s".format(elapsed))
     if fallback:
         print("  Note         : LLM unavailable - used weighted similarity vote")
     print("")
@@ -149,10 +151,12 @@ def process_one(user_input: str, config: dict,
                 embed_agent, kb_agent, llm_agent, preprocessor,
                 rlhf_agent=None, caution_groups=None, enable_rlhf=True):
     """Run the pipeline and handle output + RLHF feedback collection."""
-    result = run_pipeline(
+    start   = time.time()
+    result  = run_pipeline(
         user_input, config, embed_agent, kb_agent, llm_agent, preprocessor,
         caution_groups=caution_groups
     )
+    elapsed = time.time() - start
 
     # ── Non-IT input ──────────────────────────────────────────────────────
     if not result.get("is_valid_ticket", True):
@@ -170,6 +174,8 @@ def process_one(user_input: str, config: dict,
         print("    - 'HaviConnect website not loading'")
         print("    - 'Laptop not connecting to VPN'")
         print("")
+        print("  Time taken   : {:.2f}s".format(elapsed))
+        print("")
         print("  " + "=" * 56)
         print("")
         return
@@ -180,11 +186,11 @@ def process_one(user_input: str, config: dict,
         result["assignment_group"] = DEFAULT_GROUP
         result["confidence"]       = "low"
         result["confidence_score"] = 1
-        print_result(result, user_input)
+        print_result(result, user_input, elapsed)
         print("  ⚠  Similarity below " + str(SIMILARITY_THRESHOLD) + "/10 — auto-assigned to: " + DEFAULT_GROUP)
         print("")
     else:
-        print_result(result, user_input)
+        print_result(result, user_input, elapsed)
 
     # ── RLHF feedback collection ──────────────────────────────────────────
     if rlhf_agent and enable_rlhf:
