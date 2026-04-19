@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ARIA — Ticket Assignment Predictor</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: #f4f6f9;
+      color: #222;
+      min-height: 100vh;
+    }
+
+    /* ── Header ──────────────────────────────────────────── */
+    header {
+      background: #1a2b4a;
+      color: #fff;
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    header .logo {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+    header .tagline {
+      font-size: 13px;
+      color: #a8b8cc;
+      margin-top: 2px;
+    }
+    header .status-pills {
+      margin-left: auto;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .pill {
+      background: #243a5e;
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 12px;
+      color: #c8d8ea;
+    }
+    .pill span { color: #7ecfff; font-weight: 600; }
+
+    /* ── Main layout ─────────────────────────────────────── */
+    main {
+      max-width: 860px;
+      margin: 36px auto;
+      padding: 0 18px 60px;
+    }
+
+    /* ── Input card ──────────────────────────────────────── */
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.08);
+      padding: 28px 30px;
+      margin-bottom: 24px;
+    }
+
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 8px;
+      font-size: 14px;
+      color: #333;
+    }
+
+    textarea {
+      width: 100%;
+      border: 1px solid #ccd3db;
+      border-radius: 6px;
+      padding: 12px 14px;
+      font-size: 14px;
+      font-family: inherit;
+      resize: vertical;
+      min-height: 90px;
+      outline: none;
+      transition: border .2s;
+    }
+    textarea:focus { border-color: #1a6fbf; }
+
+    button#submit-btn {
+      margin-top: 14px;
+      background: #1a6fbf;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 10px 28px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    button#submit-btn:hover { background: #155a9e; }
+    button#submit-btn:disabled { background: #7aadd6; cursor: not-allowed; }
+
+    /* ── Loading ─────────────────────────────────────────── */
+    #loading {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      margin-top: 18px;
+      color: #555;
+      font-size: 14px;
+    }
+    .spinner {
+      width: 20px; height: 20px;
+      border: 3px solid #d0dce8;
+      border-top-color: #1a6fbf;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Error ───────────────────────────────────────────── */
+    #error-box {
+      display: none;
+      background: #fff4f4;
+      border: 1px solid #e8a0a0;
+      border-radius: 6px;
+      padding: 12px 16px;
+      color: #b00;
+      font-size: 14px;
+      margin-top: 14px;
+    }
+
+    /* ── Result card ─────────────────────────────────────── */
+    #result-card { display: none; }
+
+    .result-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .group-name {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1a2b4a;
+    }
+    .badge {
+      display: inline-block;
+      border-radius: 4px;
+      padding: 3px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .5px;
+    }
+    .badge-high   { background: #d4edda; color: #1a6b2e; }
+    .badge-medium { background: #fff3cd; color: #856404; }
+    .badge-low    { background: #f8d7da; color: #842029; }
+
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px;
+      font-size: 13px;
+      color: #555;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #eee;
+    }
+    .meta-row strong { color: #222; }
+
+    .warning-box {
+      background: #fff8e1;
+      border: 1px solid #f0c060;
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: #7a5500;
+      margin-bottom: 16px;
+    }
+    .fallback-box {
+      background: #f0f4ff;
+      border: 1px solid #b0c0e8;
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: #334;
+      margin-bottom: 16px;
+    }
+
+    /* ── Not IT ticket ───────────────────────────────────── */
+    .not-it-box {
+      background: #fff4f4;
+      border: 1px solid #e8a0a0;
+      border-radius: 6px;
+      padding: 18px 20px;
+      font-size: 14px;
+      color: #600;
+    }
+    .not-it-box h3 { margin-bottom: 8px; }
+    .not-it-box ul { margin: 8px 0 0 18px; color: #444; font-size: 13px; }
+
+    /* ── Similar tickets table ───────────────────────────── */
+    h3.section-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: 10px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    thead th {
+      background: #f0f3f7;
+      padding: 8px 10px;
+      text-align: left;
+      font-weight: 600;
+      color: #444;
+      border-bottom: 2px solid #dde3ea;
+    }
+    tbody tr { border-bottom: 1px solid #eef1f4; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody td { padding: 8px 10px; vertical-align: top; }
+    tbody tr.matched td { background: #f0f8f0; }
+
+    .src-badge {
+      display: inline-block;
+      border-radius: 3px;
+      padding: 1px 6px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .src-csv  { background: #e8f0ff; color: #2244aa; }
+    .src-doc  { background: #fff0d0; color: #885500; }
+    .src-rlhf-pos { background: #d8f5e4; color: #1a6b35; }
+    .src-rlhf-neg { background: #ffe8cc; color: #7a3800; }
+
+    .sim-bar-wrap { display: flex; align-items: center; gap: 6px; }
+    .sim-bar {
+      height: 6px;
+      border-radius: 3px;
+      background: #c8daf0;
+      flex: 1;
+    }
+    .sim-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: #1a6fbf;
+    }
+    .sim-val { font-weight: 600; color: #1a2b4a; min-width: 26px; }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────────────────── -->
+<header>
+  <div>
+    <div class="logo">ARIA</div>
+    <div class="tagline">Automated Routing and Intelligent Assignment</div>
+  </div>
+  <div class="status-pills">
+    <div class="pill">Model: <span>{{ llm_model }}</span></div>
+    <div class="pill">KB: <span>{{ kb_count }} tickets</span></div>
+    <div class="pill">Groups: <span>{{ group_count }}</span></div>
+    <div class="pill">LLM: <span id="llm-status-pill">{{ llm_status }}</span></div>
+  </div>
+</header>
+
+<!-- ── Main ─────────────────────────────────────────────────────────────── -->
+<main>
+
+  <!-- Input card -->
+  <div class="card">
+    <label for="ticket-input">Ticket Description</label>
+    <textarea
+      id="ticket-input"
+      placeholder="e.g. VPN not connecting from home office, SAP login failing, Laptop not joining domain..."
+      rows="3"
+    ></textarea>
+
+    <button id="submit-btn" onclick="submitTicket()">Predict Assignment Group</button>
+
+    <!-- Loading -->
+    <div id="loading">
+      <div class="spinner"></div>
+      <span id="loading-text">Analysing ticket...</span>
+    </div>
+
+    <!-- Error -->
+    <div id="error-box"></div>
+  </div>
+
+  <!-- Result -->
+  <div class="card" id="result-card">
+    <div id="result-content"></div>
+  </div>
+
+</main>
+
+<script>
+  const loadingMessages = [
+    "Embedding ticket description...",
+    "Searching knowledge base...",
+    "Asking LLM for best match...",
+    "Almost there...",
+  ];
+  let loadingInterval = null;
+
+  function startLoadingAnimation() {
+    let i = 0;
+    document.getElementById("loading-text").textContent = loadingMessages[0];
+    loadingInterval = setInterval(() => {
+      i = Math.min(i + 1, loadingMessages.length - 1);
+      document.getElementById("loading-text").textContent = loadingMessages[i];
+    }, 4000);
+  }
+
+  function stopLoadingAnimation() {
+    if (loadingInterval) clearInterval(loadingInterval);
+  }
+
+  function srcBadge(src) {
+    const map = {
+      csv:   ["src-csv",      "csv"],
+      doc:   ["src-doc",      "doc"],
+      "rlhf+": ["src-rlhf-pos", "rlhf+"],
+      "rlhf~": ["src-rlhf-neg", "rlhf~"],
+    };
+    const [cls, label] = map[src] || ["src-csv", src];
+    return `<span class="src-badge ${cls}">${label}</span>`;
+  }
+
+  function simBar(score) {
+    const pct = Math.min(score * 10, 100);
+    return `
+      <div class="sim-bar-wrap">
+        <span class="sim-val">${score}</span>
+        <div class="sim-bar"><div class="sim-bar-fill" style="width:${pct}%"></div></div>
+      </div>`;
+  }
+
+  function confidenceBadge(conf) {
+    const cls = { HIGH: "badge-high", MEDIUM: "badge-medium", LOW: "badge-low" };
+    return `<span class="badge ${cls[conf] || 'badge-low'}">${conf}</span>`;
+  }
+
+  async function submitTicket() {
+    const desc = document.getElementById("ticket-input").value.trim();
+    if (!desc) return;
+
+    // Reset UI
+    document.getElementById("error-box").style.display  = "none";
+    document.getElementById("result-card").style.display = "none";
+    document.getElementById("loading").style.display     = "flex";
+    document.getElementById("submit-btn").disabled       = true;
+    startLoadingAnimation();
+
+    try {
+      const res  = await fetch("/predict", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ description: desc }),
+      });
+      const data = await res.json();
+
+      stopLoadingAnimation();
+      document.getElementById("loading").style.display = "none";
+      document.getElementById("submit-btn").disabled   = false;
+
+      if (!res.ok) {
+        const box = document.getElementById("error-box");
+        box.textContent   = data.error || "An error occurred.";
+        box.style.display = "block";
+        return;
+      }
+
+      renderResult(data, desc);
+
+    } catch (err) {
+      stopLoadingAnimation();
+      document.getElementById("loading").style.display = "none";
+      document.getElementById("submit-btn").disabled   = false;
+      const box = document.getElementById("error-box");
+      box.textContent   = "Network error: " + err.message;
+      box.style.display = "block";
+    }
+  }
+
+  function renderResult(data, desc) {
+    const card    = document.getElementById("result-card");
+    const content = document.getElementById("result-content");
+    card.style.display = "block";
+
+    // ── Not IT ticket ────────────────────────────────────────────────────
+    if (!data.valid_ticket) {
+      content.innerHTML = `
+        <div class="not-it-box">
+          <h3>⚠ Not an IT Ticket</h3>
+          <p>The input does not appear to be an IT support ticket.
+             Please describe a technical issue, access problem, software/hardware fault,
+             or IT service request.</p>
+          <ul>
+            <li>Cannot log in to SAP</li>
+            <li>HaviConnect website not loading</li>
+            <li>Laptop not connecting to VPN</li>
+          </ul>
+          <p style="margin-top:10px;color:#888;font-size:12px;">Time taken: ${data.elapsed}s</p>
+        </div>`;
+      return;
+    }
+
+    // ── Warnings ─────────────────────────────────────────────────────────
+    let warnings = "";
+    if (data.low_similarity_warning) {
+      warnings += `<div class="warning-box">⚠ Low similarity — auto-assigned to default group: <strong>${data.assignment_group}</strong></div>`;
+    }
+    if (data.fallback) {
+      warnings += `<div class="fallback-box">ℹ LLM unavailable — result based on weighted similarity vote (fallback mode).</div>`;
+    }
+
+    // ── Similar tickets table ─────────────────────────────────────────────
+    let rows = "";
+    for (const t of data.similar_tickets) {
+      const matchClass = t.matched ? "matched" : "";
+      const arrow      = t.matched ? " ◀" : "";
+      rows += `
+        <tr class="${matchClass}">
+          <td>${t.rank}.</td>
+          <td>${t.short_description}${arrow}</td>
+          <td>${t.assignment_group}</td>
+          <td>${simBar(t.similarity)}</td>
+          <td>${srcBadge(t.source)}</td>
+        </tr>`;
+    }
+
+    content.innerHTML = `
+      <div class="result-header">
+        <div>
+          <div style="font-size:12px;color:#888;margin-bottom:4px;">PREDICTED ASSIGNMENT GROUP</div>
+          <div class="group-name">${data.assignment_group}</div>
+        </div>
+        ${confidenceBadge(data.confidence)}
+      </div>
+
+      <div class="meta-row">
+        <div>Score: <strong>${data.confidence_score}/10</strong></div>
+        <div>Matched: <strong>${data.match_count} of ${data.top_k}</strong> similar tickets</div>
+        <div>Time: <strong>${data.elapsed}s</strong></div>
+        <div>Ticket: <strong>${desc.length > 60 ? desc.slice(0, 60) + "…" : desc}</strong></div>
+      </div>
+
+      ${warnings}
+
+      <h3 class="section-title">Similar Tickets &amp; KB Articles Used</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Description</th>
+            <th>Assignment Group</th>
+            <th>Similarity</th>
+            <th>Source</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+
+    card.scrollIntoView({ behavior: "smooth" });
+  }
+
+  // Submit on Ctrl+Enter
+  document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("ticket-input").addEventListener("keydown", e => {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) submitTicket();
+    });
+  });
+</script>
+</body>
+</html>
