@@ -89,7 +89,7 @@ class LLMAgent:
         try:
             response = ollama.chat(
                 model    = self.model,
-                options  = {"temperature": self.temperature},
+                options  = {"temperature": self.temperature, "num_predict": 30},
                 messages = [
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user",   "content": prompt},
@@ -103,8 +103,11 @@ class LLMAgent:
                 return self._invalid_ticket_result(similar_tickets, raw_answer)
 
             if not self._looks_like_group(raw_answer, valid_groups):
-                if self._is_non_it_input(short_description):
-                    return self._invalid_ticket_result(similar_tickets, raw_answer)
+                # if self._is_non_it_input(short_description):
+                #     return self._invalid_ticket_result(similar_tickets, raw_answer)
+                return self._weighted_vote_result(
+                    similar_tickets, valid_groups, llm_raw=raw_answer
+                )
 
             predicted = self._validate(raw_answer, valid_groups)
 
@@ -155,6 +158,8 @@ class LLMAgent:
 
     def _looks_like_group(self, raw: str, valid_groups: list[str]) -> bool:
         raw_lower = raw.lower()
+        if "not_it_ticket" in raw_lower:
+            return True
         return any(
             group.lower() in raw_lower or raw_lower in group.lower()
             for group in valid_groups
