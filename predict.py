@@ -33,6 +33,8 @@ from agents.embedding_agent       import EmbeddingAgent
 from agents.knowledge_base_agent  import KnowledgeBaseAgent
 from agents.llm_agent             import LLMAgent
 from agents.rlhf_agent            import RLHFAgent
+from agents.decision_agent        import DecisionAgent
+from agents.explanation_agent     import ExplanationAgent
 
 SIMILARITY_THRESHOLD = 7.0
 DEFAULT_GROUP        = "IT-Service Desk"
@@ -62,9 +64,20 @@ def print_result(result: dict, short_description: str, elapsed: float = 0.0):
           + "  (" + str(matches) + " of " + str(top_k) + " similar tickets matched)")
     print("  Time taken   : {:.2f}s".format(elapsed))
     if fallback:
-        print("  Note         : LLM unavailable - used weighted similarity vote")
+        print("  Note         : Final answer fell back to retrieval-weighted vote")
+    if result.get("retrieval_only"):
+        print("  Decision mode: Retrieval-first auto decision")
+    else:
+        print("  Decision mode: Retrieval shortlist + LLM tie-break")
+    if result.get("candidate_groups"):
+        print("  Candidates   : " + ", ".join(result["candidate_groups"]))
+    if result.get("top_alternative_groups"):
+        print("  Alternatives : " + ", ".join(result["top_alternative_groups"]))
     print("")
     print("  Similar historical tickets and KB articles used:")
+    if result.get("explanation"):
+        print("  Rationale    : " + result["explanation"])
+        print("")
     print("")
     print("  {:<5} {:<48} {:<35} {} {}".format(
         "Rank", "Short Description", "Assignment Group", "Similarity", "Source"))
@@ -110,15 +123,19 @@ def run_pipeline(short_description: str, config: dict,
     """Run the full prediction pipeline for one ticket description."""
     clean_text      = preprocessor.process(short_description)
     query_vector    = embed_agent.embed(clean_text)
-    top_k           = config["vector_db"]["top_k"]
+    top_k           = config["vector_db"].get("top_k", 30)
     similar_tickets = kb_agent.search(query_vector, top_k=top_k)
     valid_groups    = config["assignment_groups"]
-    result          = llm_agent.predict(
+    decision_agent  = DecisionAgent(llm_agent=llm_agent)
+    explanation_agent = ExplanationAgent()
+    result          = decision_agent.predict(
         short_description = clean_text,
         similar_tickets   = similar_tickets,
         valid_groups      = valid_groups,
         caution_groups    = caution_groups or [],
     )
+    result["clean_text"] = clean_text
+    result["explanation"] = explanation_agent.explain(result)
     return result
 
 

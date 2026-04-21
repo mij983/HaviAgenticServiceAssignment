@@ -191,6 +191,17 @@
       margin-bottom: 16px;
     }
 
+    .explain-box {
+      background: #f7f9fc;
+      border: 1px solid #d8e1ee;
+      border-radius: 6px;
+      padding: 12px 14px;
+      font-size: 13px;
+      color: #334;
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+
     /* ── Not IT ticket ───────────────────────────────────── */
     .not-it-box {
       background: #fff4f4;
@@ -423,7 +434,9 @@
       warnings += `<div class="warning-box">⚠ Low similarity — auto-assigned to default group: <strong>${data.assignment_group}</strong></div>`;
     }
     if (data.fallback) {
-      warnings += `<div class="fallback-box">ℹ LLM unavailable — result based on weighted similarity vote (fallback mode).</div>`;
+      warnings += `<div class="fallback-box">ℹ Final answer used retrieval-weighted fallback.</div>`;
+    } else if (data.retrieval_only) {
+      warnings += `<div class="fallback-box">ℹ Retrieval-first decision: evidence was strong enough to skip LLM tie-break.</div>`;
     }
 
     // ── Similar tickets table ─────────────────────────────────────────────
@@ -458,6 +471,10 @@
       </div>
 
       ${warnings}
+      <div class="explain-box">
+        <strong>Why this group:</strong> ${data.explanation || "No explanation available."}<br/>
+        <strong>Candidate groups:</strong> ${(data.candidate_groups || []).join(", ") || "N/A"}
+      </div>
 
       <h3 class="section-title">Similar Tickets &amp; KB Articles Used</h3>
       <table>

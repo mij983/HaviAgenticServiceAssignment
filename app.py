@@ -27,6 +27,8 @@ from agents.knowledge_base_agent import KnowledgeBaseAgent
 from agents.llm_agent            import LLMAgent
 from agents.preprocessing_agent  import PreprocessingAgent
 from agents.rlhf_agent           import RLHFAgent
+from agents.decision_agent       import DecisionAgent
+from agents.explanation_agent    import ExplanationAgent
 
 # ── Constants (same as predict.py) ───────────────────────────────────────────
 SIMILARITY_THRESHOLD = 7.0
@@ -56,6 +58,8 @@ llm_agent    = LLMAgent(
     model       = config["llm"]["model"],
     temperature = config["llm"]["temperature"],
 )
+decision_agent = DecisionAgent(llm_agent=llm_agent)
+explanation_agent = ExplanationAgent()
 
 rlhf_agent   = RLHFAgent(
     feedback_path = rlhf_cfg.get("feedback_path", "data/rlhf_feedback.jsonl"),
@@ -67,15 +71,17 @@ caution_groups = rlhf_agent.get_low_reward_groups()
 def run_pipeline(short_description: str) -> dict:
     clean_text      = preprocessor.process(short_description)
     query_vector    = embed_agent.embed(clean_text)
-    top_k           = config["vector_db"]["top_k"]
+    top_k           = config["vector_db"].get("top_k", 30)
     similar_tickets = kb_agent.search(query_vector, top_k=top_k)
     valid_groups    = config["assignment_groups"]
-    result          = llm_agent.predict(
+    result          = decision_agent.predict(
         short_description = clean_text,
         similar_tickets   = similar_tickets,
         valid_groups      = valid_groups,
         caution_groups    = caution_groups or [],
     )
+    result["clean_text"] = clean_text
+    result["explanation"] = explanation_agent.explain(result)
     return result
 
 
@@ -157,16 +163,20 @@ def predict():
     rlhf_agent.record_prediction(user_input, result)
 
     return jsonify({
-        "valid_ticket":          True,
-        "assignment_group":      result["assignment_group"],
-        "confidence":            result["confidence"].upper(),
-        "confidence_score":      result.get("confidence_score", "N/A"),
-        "match_count":           result["match_count"],
-        "top_k":                 result["top_k"],
-        "fallback":              result.get("fallback", False),
+        "valid_ticket":           True,
+        "assignment_group":       result["assignment_group"],
+        "confidence":             result["confidence"].upper(),
+        "confidence_score":       result.get("confidence_score", "N/A"),
+        "match_count":            result["match_count"],
+        "top_k":                  result["top_k"],
+        "fallback":               result.get("fallback", False),
+        "retrieval_only":         result.get("retrieval_only", False),
+        "candidate_groups":       result.get("candidate_groups", []),
+        "top_alternative_groups": result.get("top_alternative_groups", []),
+        "explanation":            result.get("explanation", ""),
         "low_similarity_warning": low_similarity_warning,
-        "elapsed":               elapsed,
-        "similar_tickets":       similar,
+        "elapsed":                elapsed,
+        "similar_tickets":        similar,
     })
 
 

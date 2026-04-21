@@ -22,7 +22,7 @@ vector_db:
   # Increased from 5 to 10.
   # More candidates give the LLM stronger evidence and reduce cases where
   # the correct group is narrowly missed. The LLM still picks one answer.
-  top_k: 5
+  top_k: 30
 
 # ─── LLM ─────────────────────────────────────────────────────────────────────
 # Provider: ollama (runs fully locally, no GPU required)
