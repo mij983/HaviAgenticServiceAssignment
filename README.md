@@ -245,6 +245,26 @@ matches so you can see the source at a glance.
 python predict.py
 ```
 
+or if u want to use in windows app means
+save this file aria.bat
+```
+@echo off
+cd /d "C:\Users\Localadm\Documents\AgenticServiceAssignment-feature-llm"
+call .venv\Scripts\activate
+
+echo Starting Ollama...
+start "" "C:\Users\Localadm\AppData\Local\Programs\Ollama\ollama.exe" serve
+
+echo Waiting for Ollama to load...
+timeout /t 5 /nobreak > nul
+
+start http://localhost:5000
+python app.py
+pause
+```
+
+Run this bat file
+
 ---
 
 ## Usage
