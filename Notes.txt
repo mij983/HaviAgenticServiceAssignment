@@ -1,4 +1,13 @@
+# Havi Agentic Service Assignment – AI Ticket Routing System
 
+> **AI-powered intelligent ticket routing system** that automatically predicts the correct assignment group for IT incidents using semantic search, vector databases, and local LLMs.
+
+---
+
+## 📋 Technology Stack
+
+| Technology | Purpose |
+|------------|---------|
 | Python | Core backend development |
 | Flask/FastAPI | API and web application |
 | ChromaDB | Vector database storage |
@@ -11,1358 +20,251 @@
 | NumPy | Numerical operations |
 | Scikit-learn | Similarity utilities |
 | LangChain (optional) | AI orchestration |
-| HTML/CSS/JS | Frontend UI |# Havi Agentic Service Assignment – Detailed Project & Code Walkthrough
+| HTML/CSS/JS | Frontend UI |
 
-Overview
-This project is an AI-powered ticket routing system that predicts the correct assignment group/team for IT support tickets.
+---
 
-It uses:
+## 🎯 Project Goal
 
-Semantic Search (vector embeddings)
+**"When a user creates a ticket, the system intelligently identifies which support team or assignment group should handle that issue."**
 
-Knowledge Base documents
+---
 
-Historical ticket data
+## 🏗️ High-Level Architecture Flow
 
-Local LLMs via Ollama
-
-ChromaDB vector database
-
-The goal is:
-
-User enters a new incident/ticket → System predicts the best assignment group automatically.
-
-1. Complete High-Level Architecture Flow
+```
 User submits incident/ticket
         ↓
-Frontend/UI Layer
+    Frontend/UI Layer
         ↓
-API/Application Layer
+    API/Application Layer
         ↓
-Preprocessing Agent
+    Preprocessing Agent
         ↓
-Embedding Agent
+    Embedding Agent
         ↓
 Vector Database Search (ChromaDB)
         ↓
-Retrieve Similar Historical Tickets
+Retrieve Similar Historical Tickets + KB Articles
         ↓
-Retrieve Related KB Articles/Documents
+    Candidate Group Agent
         ↓
-Candidate Group Agent
+    LLM Reasoning Agent
         ↓
-LLM Reasoning Agent
+    Confidence Calculation
         ↓
-Confidence Calculation
+    Decision Agent
         ↓
-Decision Agent
-        ↓
-Explanation Agent
+    Explanation Agent
         ↓
 Final Assignment Group Prediction
-2. Detailed End-to-End Workflow
-User Ticket
-   ↓
-Preprocessing Agent
-   ↓
-Embedding Agent
-   ↓
-ChromaDB Semantic Search
-   ↓
-Retrieve Similar Tickets + KB Docs
-   ↓
-LLM Agent (Mistral/Gemma)
-   ↓
-Decision Agent
-   ↓
-Predicted Assignment Group
-Project Structure Walkthrough
-Main Files
-app.py
-Main web application.
+```
 
-Responsibilities:
+**This is a Retrieval-Augmented Generation (RAG) based AI architecture.**
 
-Starts the web UI
+---
 
-Accepts ticket input
+## 🔄 Step-by-Step Workflow
 
-Calls prediction pipeline
+### Step 1 – User Ticket Input
+User enters ticket description.
+> **Example:** *"Unable to connect to VPN after password reset"*
 
-Displays prediction result
+### Step 2 – Preprocessing Agent
+Cleans and normalizes the ticket text.
 
-Think of this as:
+| Before | After |
+|--------|-------|
+| `INC000123 – VPN ISSUE!!!` | `vpn issue` |
 
-Frontend entry point + backend API handler.
+**Activities:** Remove special characters, ticket IDs, extra spaces → lowercase conversion → normalize sentence
 
-predict.py
-Core prediction workflow.
+### Step 3 – Embedding Generation
+Converts text into vector embeddings using **Sentence Transformers**.
 
-This is the main orchestration file.
+```
+"vpn access issue" → [0.234, -0.781, 0.991, ...]
+```
 
-Flow inside this file:
+**Models used:** `all-mpnet-base-v2` or `all-MiniLM-L6-v2`
 
-Read ticket input
+**Why all-mpnet-base-v2?**
+- Excellent semantic similarity accuracy
+- Better contextual understanding
+- Strong sentence embedding performance
+- Good balance between speed and quality
 
-Clean text
+### Step 4 – ChromaDB Semantic Search
+Searches embeddings against stored historical tickets and KB articles using **cosine similarity**.
 
-Generate embeddings
+**Stored data includes:**
+- Historical incidents
+- KB articles
+- SOP documents
+- Troubleshooting guides
 
-Search vector DB
+**Example retrieved results:**
 
-Send context to LLM
+| Ticket | Assignment Group | Similarity |
+|--------|-----------------|------------|
+| VPN login failure | Network Team | 0.95 |
+| VPN authentication issue | IAM Team | 0.91 |
+| Remote access problem | Network Team | 0.89 |
 
-Get predicted assignment group
+### Step 5 – LLM Reasoning Layer
+The LLM receives and analyzes:
+- Current ticket
+- Similar incidents
+- KB documents
+- Candidate assignment groups
 
-Return confidence + explanation
+**LLM Models (via Ollama):** Gemma | Mistral | Llama
 
-This is effectively:
+> **Example reasoning:** *"Similar VPN incidents were historically assigned to Network Support."*
 
-The brain controller of the application.
+### Step 6 – Final Prediction
 
-build_knowledge_base.py
-Builds vector embeddings from historical tickets.
+| Output | Value |
+|--------|-------|
+| Assignment Group | Network Support |
+| Confidence | 92% |
+| Reason | Similar VPN incidents were previously resolved by Network Support |
 
-Responsibilities:
+---
 
-Reads CSV training tickets
+## 🤖 Agent-by-Agent Breakdown
 
-Converts ticket text into embeddings
+| Agent | Responsibility |
+|-------|----------------|
+| **preprocessing_agent.py** | Clean and normalize text, remove noise, prepare AI-friendly input |
+| **embedding_agent.py** | Load transformer model, generate embeddings, convert text to vectors |
+| **knowledge_base_agent.py** | ChromaDB interactions, vector insertion, similarity search (semantic memory engine) |
+| **document_ingestion_agent.py** | Read KB files, extract text, chunk documents, prepare embeddings |
+| **llm_agent.py** | Prompt engineering, send context to LLM, get predictions, generate explanations (reasoning engine) |
+| **candidate_group_agent.py** | Identify likely assignment groups, narrow down candidate teams |
+| **confidence_agent.py** | Calculate prediction confidence, measure reliability |
+| **decision_agent.py** | Combine similarity scores + LLM reasoning, select final assignment |
+| **explanation_agent.py** | Generate human-readable explanations |
 
-Stores embeddings in ChromaDB
+---
 
-This creates:
+## 📁 Project Structure Walkthrough
 
-Searchable ticket memory.
+| File | Purpose |
+|------|---------|
+| **app.py** | Main web application (frontend entry + backend API handler) |
+| **predict.py** | Core prediction workflow (brain controller of the application) |
+| **build_knowledge_base.py** | Builds vector embeddings from historical tickets (CSV → ChromaDB) |
+| **build_knowledge_base_docs.py** | Loads KB articles (TXT, MD, PDF, HTML) into ChromaDB |
+| **rlhf_train.py** | Reinforcement learning for improvement training |
 
-build_knowledge_base_docs.py
-Loads KB articles and documents.
+---
 
-Supported document types:
+## 🧠 Training & Knowledge Building
 
-TXT
+### Historical Ticket Training Flow
+```
+CSV Historical Tickets → Load Dataset → Clean Ticket Text → Generate Embeddings → Store in ChromaDB
+```
 
-MD
+### Knowledge Base Training Flow
+```
+KB Documents → Document Loader → Chunking → Embedding Generation → Store in ChromaDB
+```
 
-PDF
+**Supported files:** PDF, TXT, Markdown, HTML
 
-HTML
+**Why chunking is needed:** Large documents exceed token limits; smaller chunks improve retrieval quality.
 
-Responsibilities:
+---
 
-Read documents
+## 💡 Why Local LLMs?
 
-Split into chunks
+| Benefit | Description |
+|---------|-------------|
+| No external API dependency | Self-contained system |
+| Better data privacy | Enterprise IT requirement |
+| Lower operational cost | No API fees |
+| Offline capability | Works without internet |
+| Faster internal processing | Reduced latency |
 
-Generate embeddings
+---
 
-Store in ChromaDB
+## 🔬 RAG Architecture
 
-Purpose:
+**RAG = Retriever + Generator**
 
-Gives additional organizational knowledge to the AI.
+| Component | Technology |
+|-----------|------------|
+| Retriever | ChromaDB semantic search |
+| Generator | Gemma / Mistral LLM |
 
-rlhf_train.py
-Used for reinforcement/improvement training.
+**Benefits:**
+- Reduces hallucinations
+- Uses organizational knowledge
+- Improves prediction quality
+- Provides explainability
 
-Purpose:
+---
 
-Improve prediction quality
+## ✅ Why This Architecture Is Powerful
 
-Learn from feedback
+| Advantage | Description |
+|-----------|-------------|
+| **Semantic Understanding** | Understands meaning instead of keywords |
+| **Modular Agent Design** | Easy to extend, debug, and replace components |
+| **Explainable AI** | Provides reasons for routing decisions |
+| **Local AI Processing** | Data privacy, no cloud dependency, reduced cost |
+| **Hybrid Knowledge System** | Combines historical incidents + KB documentation |
 
-Fine-tune routing logic
+---
 
-This is an advanced optimization/training component.
+## 📊 One-Line Summary
 
-3. Detailed Agent-by-Agent Walkthrough
-The agents/ folder contains modular AI pipeline components.
+> *"The system predicts the correct IT support assignment group by comparing new incidents with historical tickets and KB articles using embeddings, vector search, and a local LLM."*
 
-preprocessing_agent.py
-Purpose:
+---
 
-Cleans raw incident text before embedding.
+## 🚀 Quick Start Commands
 
-Main Responsibilities:
+```bash
+# Build knowledge base from historical tickets
+python build_knowledge_base.py
 
-Remove noisy characters
+# Build knowledge base from documents
+python build_knowledge_base_docs.py
 
-Normalize ticket content
+# Run the main application
+python app.py
 
-Standardize formatting
+# Optional: Run reinforcement learning training
+python rlhf_train.py
+```
 
-Prepare AI-friendly text
+---
 
-Typical Functions:
+## 📝 Example Input/Output
 
-clean_text()
+**Input:**
+> `Unable to connect to VPN after password reset`
 
-normalize_text()
-
-remove_special_characters()
-
-Why this matters:
-Poor preprocessing reduces embedding quality and semantic search accuracy.
-
-Example:
-
-Input:
-
-INC000123 - VPN ISSUE !!!
-Output:
-
-vpn issue
-Cleans and normalizes text.
-
-Typical operations:
-
-Remove ticket IDs
-
-Remove extra spaces
-
-Lowercase conversion
-
-Normalize text
-
-Purpose:
-
-Make input cleaner before embedding.
-
-embedding_agent.py
-Purpose:
-
-Converts text into vector embeddings.
-
-Core Libraries:
-
-sentence-transformers
-
-transformers
-
-torch
-
-Typical Workflow:
-
-Load transformer model
-
-Accept cleaned text
-
-Generate embeddings
-
-Return vectors
-
-Common Model:
-
-all-mpnet-base-v2
-
-Why this model is used:
-
-Excellent semantic understanding
-
-High embedding quality
-
-Strong sentence similarity performance
-
-Good balance between speed and accuracy
-
-Embedding Example:
-
-model.encode(text)
-Output:
-
-[0.234, -0.781, 0.991, ...]
-Generates sentence embeddings.
-
-Uses:
-
-Sentence Transformers
-
-all-MiniLM-L6-v2 model
-
-Output:
-
-384-dimensional vectors
-
-Purpose:
-
-Convert text into mathematical vector representation.
-
-knowledge_base_agent.py
-Purpose:
-
-Handles all ChromaDB vector database operations.
-
-Responsibilities:
-
-Insert embeddings
-
-Store metadata
-
-Query vectors
-
-Return top matches
-
-Manage collections
-
-Internal Components:
-
-Chroma client
-
-Collections
-
-Similarity search
-
-Metadata filtering
-
-Typical Operations:
-
-Insert Data
-collection.add()
-Search Data
-collection.query()
-Metadata Stored:
-
-Ticket text
-
-Assignment group
-
-Priority
-
-Resolution notes
-
-Similarity scores
-
-Purpose:
-
-Semantic memory system for the project.
-Handles ChromaDB interactions.
-
-Responsibilities:
-
-Insert embeddings
-
-Perform similarity search
-
-Retrieve top matching tickets/docs
-
-Purpose:
-
-Semantic search engine.
-
-document_ingestion_agent.py
-Processes KB documents.
-
-Responsibilities:
-
-Read files
-
-Extract text
-
-Chunk documents
-
-Prepare for embeddings
-
-Purpose:
-
-Convert company knowledge into searchable AI memory.
-
-llm_agent.py
-Purpose:
-
-Main AI reasoning engine.
-
-Responsibilities:
-
-Create prompts
-
-Send context to local LLM
-
-Receive predictions
-
-Generate explanations
-
-Extract assignment group
-
-Backend Runtime:
-
-Ollama
-
-Possible Models:
-
-Gemma
-
-Mistral
-
-Llama3
-
-Why local LLM?
-
-No external API cost
-
-Better data privacy
-
-Offline capability
-
-Faster internal processing
-
-Typical Workflow:
-
-Retrieved tickets + KB docs
-        ↓
-Prompt construction
-        ↓
-LLM inference
-        ↓
-Prediction response
-Prompt Engineering Includes:
-
-Ticket context
-
-Similar incidents
-
-KB references
-
-Routing instructions
-
-Output formatting
-Connects with Ollama local LLM.
-
-Supported models:
-
-Mistral
-
-Gemma
-
-Responsibilities:
-
-Analyze retrieved tickets
-
-Analyze KB documents
-
-Predict assignment team
-
-Generate explanation
-
-Purpose:
-
-Final reasoning engine.
-
-candidate_group_agent.py
-Filters and identifies possible assignment groups.
-
-Purpose:
-
-Narrow down routing candidates.
-
-confidence_agent.py
-Calculates confidence score.
-
-Example:
-
-High confidence
-
-Medium confidence
-
-Low confidence
-
-Purpose:
-
-Helps determine prediction reliability.
-
-decision_agent.py
-Makes final routing decision.
-
-Combines:
-
-Similarity scores
-
-LLM reasoning
-
-Candidate groups
-
-Confidence
-
-Purpose:
-
-Final assignment selection.
-
-explanation_agent.py
-Generates human-readable explanation.
-
-Example:
-
-"Matched with previous VPN access incidents handled by Network Team."
-
-Purpose:
-
-Transparency and explainability.
-
-Data Flow Walkthrough
-Step 1 – User Enters Ticket
-Example Input:
-
-Unable to connect to VPN after password reset
-What happens internally:
-
-User enters ticket description in UI.
-
-Request reaches Flask/FastAPI backend.
-
-Backend passes request to prediction pipeline.
-
-Pipeline creates execution context.
-
-Logging starts for tracing/debugging.
-
-Purpose:
-
-Capture issue description
-
-Start AI routing workflow
-Example:
-
-VPN access not working after password reset
-Step 2 – Text Preprocessing
-Example Before Cleaning:
-
-Ticket#12345 - Unable to connect to VPN after password reset!!!
-Example After Cleaning:
-
-unable to connect to vpn after password reset
-Detailed preprocessing operations:
-
-Remove special characters
-
-Remove ticket IDs
-
-Remove unnecessary spaces
-
-Convert text to lowercase
-
-Normalize words
-
-Remove noisy symbols
-
-Standardize formatting
-
-Why preprocessing matters:
-
-Improves embedding quality
-
-Reduces vector noise
-
-Better semantic matching
-
-Consistent AI understanding
-Input gets cleaned.
-
-Example:
-
-vpn access not working after password reset
-Step 3 – Embedding Generation
-The cleaned text is converted into vector embeddings.
-
-Example:
-
-"vpn access issue"
-        ↓
-[0.234, -0.887, 0.112, ...]
-Model Used:
-
-Sentence Transformers
-
-all-MiniLM-L6-v2 or all-mpnet-base-v2
-
-Detailed process:
-
-Tokenization
-
-Transformer encoding
-
-Context understanding
-
-Vector generation
-
-Numerical semantic representation
-
-Why embeddings are important:
-
-Captures meaning instead of keywords
-
-Similar tickets produce similar vectors
-
-Enables semantic search
-
-Example:
-These tickets become semantically close:
-
-"VPN not working"
-
-"Unable to connect VPN"
-
-"Remote access failure"
-
-Even though exact keywords differ.
-
-Purpose:
-
-Convert human language into machine-understandable semantic vectors.
-Embedding model converts text into vectors.
-
-Example:
-
-[0.234, -0.122, 0.991, ...]
-Step 4 – ChromaDB Vector Database Search
-Generated embedding is searched against stored embeddings.
-
-Stored Data:
-
-Historical incidents
-
-Knowledge base articles
-
-SOP documents
-
-Troubleshooting guides
-
-Detailed flow:
-
-Input vector generated
-
-ChromaDB receives vector query
-
-Similarity comparison starts
-
-Cosine similarity calculated
-
-Top matching records returned
-
-Example Retrieved Tickets:
-
-Ticket	Assignment Group	Similarity
-VPN login failure	Network Team	0.95
-VPN authentication issue	IAM Team	0.91
-Remote access problem	Network Team	0.89
-Purpose:
-
-Find the most semantically similar incidents from historical data.
-System searches:
-
-Similar historical incidents
-
-Related KB articles
-
-Returns top matching results.
-
-Step 5 – LLM Reasoning Layer
-The LLM receives:
-
-Current ticket
-
-Similar tickets
-
-KB documents
-
-Similarity scores
-
-Candidate assignment groups
-
-Example Prompt to LLM:
-
-New Ticket:
-Unable to connect VPN after password reset
-
-Similar Historical Tickets:
-1. VPN login failure → Network Team
-2. Remote access issue → Network Team
-3. VPN authentication failure → IAM Team
-
-KB Article:
-VPN reset troubleshooting guide
-
-Predict the best assignment group.
-LLM Models Used:
-
-Gemma
-
-Mistral
-
-Llama (optional)
-
-Why LLM is needed:
-
-Adds reasoning capability
-
-Understands context
-
-Resolves ambiguity
-
-Generates explanations
-
-Without LLM:
-
-Only similarity matching happens
-
-With LLM:
-
-Intelligent decision-making happens
-LLM receives:
-
-New ticket
-
-Similar tickets
-
-KB documents
-
-Candidate groups
-
-LLM reasons which team is best.
-
-Step 6 – Final Prediction
-Output example:
-
+**Output:**
+```
 Assignment Group: Network Support
 Confidence: 92%
-Reason:
-Similar VPN incidents were previously resolved by Network Support.
-4. Detailed Technology Stack
-Technology	Purpose
-Python	Backend logic
-ChromaDB	Vector database
-Sentence Transformers	Embeddings
-Ollama	Local LLM runtime
-Mistral/Gemma	Reasoning models
-Pandas	CSV processing
-Flask/Web UI	Frontend interaction
-5. Why This Architecture is Powerful
-Advantages
-Semantic Search
-Understands meaning instead of keyword matching.
-
-Local LLM
-No external API dependency.
-
-KB + Ticket Hybrid
-Uses both:
-
-Historical incidents
-
-Company documentation
-
-Modular Agent Design
-Easy to:
-
-Extend
-
-Debug
-
-Replace components
-
-Explainable AI
-Provides reasons for routing.
-
-6. Training & Knowledge Building Process
-Historical Ticket Training Flow
-CSV Historical Tickets
-        ↓
-Load Dataset
-        ↓
-Clean Ticket Text
-        ↓
-Generate Embeddings
-        ↓
-Store in ChromaDB
-Detailed Steps:
-
-Step 1 – Dataset Loading
-The system reads:
-
-Incident descriptions
-
-Assignment groups
-
-Resolution notes
-
-Usually from:
-
-CSV files
-
-Excel exports
-
-ServiceNow exports
-
-Step 2 – Text Cleaning
-Preprocessing removes:
-
-Noise
-
-IDs
-
-Formatting issues
-
-Step 3 – Embedding Creation
-Each ticket becomes a vector.
-
-Example:
-
-"VPN issue"
-→
-[0.12, 0.87, -0.22, ...]
-Step 4 – Vector Storage
-Embeddings stored in:
-
-ChromaDB collections
-
-Stored along with:
-
-Assignment group
-
-Ticket metadata
-
-Resolution info
-
-Step 5 – Retrieval During Prediction
-When a new ticket arrives:
-
-New embedding generated
-
-Similar vectors searched
-
-Historical patterns retrieved
-
-LLM reasons on retrieved context
-
-7. Knowledge Base (KB) Training Flow
-KB Documents
-    ↓
-Document Loader
-    ↓
-Chunking
-    ↓
-Embedding Generation
-    ↓
-Store in ChromaDB
-Supported Files:
-
-PDF
-
-TXT
-
-Markdown
-
-HTML
-
-Why chunking is needed:
-
-Large documents exceed token limits
-
-Smaller chunks improve retrieval quality
-
-Example:
-A 100-page SOP becomes:
-
-Chunk 1
-
-Chunk 2
-
-Chunk 3
-
-etc.
-
-Each chunk gets separate embeddings.
-
-8. Retrieval-Augmented Generation (RAG)
-This project follows RAG architecture.
-
-RAG =
-
-Retriever + LLM Generator
-Retriever:
-
-ChromaDB semantic search
-
-Generator:
-
-Gemma/Mistral LLM
-
-Why RAG is powerful:
-
-Uses live organizational knowledge
-
-Avoids hallucinations
-
-Improves routing accuracy
-
-Adds explainability
-
-Uses company-specific context
-
-9. Important Design Advantages
-Modular Design
-Each agent has independent responsibility.
-
-Benefits:
-
-Easy debugging
-
-Easier upgrades
-
-Easier testing
-
-Better scalability
-
-Semantic Understanding
-The system understands meaning instead of exact keywords.
-
-Traditional System:
-
-keyword matching only
-AI System:
-
-context + meaning understanding
-Explainable Predictions
-The AI explains WHY a team was selected.
-
-Example:
-
-Predicted Network Team because similar VPN incidents were previously assigned there.
-Local AI Processing
-Everything can run locally.
-
-Benefits:
-
-Data privacy
-
-No cloud dependency
-
-Reduced cost
-
-Faster inference
-
-10. Overall System Summary
-This project is essentially:
-
-An AI-based intelligent IT ticket routing platform.
-
-It combines:
-
-Retrieval-Augmented Generation (RAG)
-
-Semantic similarity search
-
-Vector databases
-
-Local LLM reasoning
-
-Knowledge base retrieval
-
-to automate Service Desk assignment workflows.
-
-Simple One-Line Summary
-"The system predicts the correct IT support assignment group by comparing new incidents with historical tickets and KB articles using embeddings, vector search, and a local LLM."
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Hi Team, today I’ll walk through the Havi Agentic Service Assignment project.
-This project is an AI-powered intelligent ticket routing system designed to automatically predict the correct assignment group for IT incidents.
-
-The main goal of the project is:
-When a user creates a ticket, the system should intelligently identify which support team or assignment group should handle that issue.
-
-Overall Architecture
-The complete flow works like this:
-
-User submits a ticket
-→ The ticket goes through preprocessing
-→ Text embeddings are generated
-→ ChromaDB performs semantic similarity search
-→ Similar historical tickets and KB articles are retrieved
-→ The LLM analyzes the context
-→ The system predicts the best assignment group
-→ Confidence and explanation are generated
-
-So overall, this is a Retrieval-Augmented Generation or RAG-based AI architecture.
-
-Step-by-Step Workflow
-Step 1 – User Ticket Input
-The user enters a ticket description.
-
-Example:
-“Unable to connect to VPN after password reset.”
-
-The request comes into the web application backend and is passed to the prediction pipeline.
-
-Step 2 – Preprocessing Agent
-The preprocessing agent cleans and normalizes the ticket text.
-
-Activities include:
-
-Removing special characters
-
-Removing ticket IDs
-
-Converting text to lowercase
-
-Cleaning unnecessary spaces
-
-Normalizing the sentence
-
-Example:
-
-Before:
-“INC000123 – VPN ISSUE!!!”
-
-After:
-“vpn issue”
-
-This step is important because cleaner text improves embedding quality and search accuracy.
-
-Step 3 – Embedding Generation
-After preprocessing, the embedding agent converts the text into vector embeddings.
-
-We use Sentence Transformers models such as:
-
-all-mpnet-base-v2
-
-all-MiniLM-L6-v2
-
-These models convert human language into mathematical vector representations.
-
-Example:
-“vpn access issue”
-becomes:
-[0.234, -0.781, 0.991, ...]
-
-The benefit of embeddings is semantic understanding.
-
-For example:
-
-“VPN not working”
-
-“Unable to connect VPN”
-
-“Remote access failure”
-
-All these become semantically similar even though keywords differ.
-
-Why We Use all-mpnet-base-v2
-We selected all-mpnet-base-v2 because:
-
-It provides excellent semantic similarity accuracy
-
-Better contextual understanding
-
-Strong sentence embedding performance
-
-Good balance between speed and quality
-
-This improves ticket similarity matching significantly.
-
-Step 4 – ChromaDB Semantic Search
-The generated embeddings are searched against embeddings stored in ChromaDB.
-
-ChromaDB acts as the vector database for the system.
-
-Stored data includes:
-
-Historical incidents
-
-KB articles
-
-SOP documents
-
-Troubleshooting guides
-
-The search works using cosine similarity.
-
-The system retrieves the most similar historical tickets.
-
-Example:
-
-VPN login failure → Network Team
-VPN authentication issue → IAM Team
-Remote access problem → Network Team
-
-This gives contextual knowledge to the AI.
-
-Historical Ticket Training Process
-The historical training flow is:
-
-CSV historical tickets
-→ Preprocessing
-→ Embedding generation
-→ Store embeddings in ChromaDB
-
-Each ticket embedding is stored along with:
-
-Assignment group
-
-Resolution information
-
-Metadata
-
-Ticket description
-
-This creates a searchable organizational memory.
-
-Knowledge Base Training Flow
-Apart from incidents, we also ingest KB documents.
-
-Supported formats:
-
-PDF
-
-TXT
-
-Markdown
-
-HTML
-
-The document ingestion flow is:
-
-Documents
-→ Text extraction
-→ Chunking
-→ Embedding generation
-→ Store in ChromaDB
-
-Chunking is important because large documents are split into smaller AI-searchable pieces.
-
-This helps retrieval quality and reduces token overload.
-
-Step 5 – LLM Reasoning Layer
-After retrieval, the LLM agent receives:
-
-Current ticket
-
-Similar incidents
-
-KB documents
-
-Candidate assignment groups
-
-The LLM then performs reasoning.
-
-We use local LLMs through Ollama such as:
-
-Gemma
-
-Mistral
-
-Llama
-
-The LLM analyzes all retrieved context and predicts the best assignment group.
-
-Example reasoning:
-“Similar VPN incidents were historically assigned to Network Support.”
-
-Why We Use Local LLMs
-Benefits include:
-
-No external API dependency
-
-Better data privacy
-
-Lower operational cost
-
-Offline capability
-
-Faster internal processing
-
-This is important for enterprise IT environments.
-
-Agent-by-Agent Breakdown
-preprocessing_agent.py
-Responsible for:
-
-Cleaning and normalizing text
-
-Removing noise
-
-Preparing AI-friendly input
-
-embedding_agent.py
-Responsible for:
-
-Loading transformer model
-
-Generating embeddings
-
-Converting text into vectors
-
-knowledge_base_agent.py
-Responsible for:
-
-ChromaDB interactions
-
-Vector insertion
-
-Similarity search
-
-Retrieval operations
-
-This acts as the semantic memory engine.
-
-document_ingestion_agent.py
-Responsible for:
-
-Reading KB files
-
-Extracting text
-
-Chunking documents
-
-Preparing embeddings
-
-llm_agent.py
-Responsible for:
-
-Prompt engineering
-
-Sending context to LLM
-
-Getting predictions
-
-Generating explanations
-
-This is the reasoning engine of the platform.
-
-candidate_group_agent.py
-Responsible for:
-
-Identifying likely assignment groups
-
-Narrowing down candidate teams
-
-confidence_agent.py
-Responsible for:
-
-Calculating prediction confidence
-
-Measuring reliability of assignment
-
-decision_agent.py
-Responsible for:
-
-Combining similarity scores
-
-Combining LLM reasoning
-
-Selecting final assignment group
-
-explanation_agent.py
-Responsible for:
-
-Generating human-readable explanations
-
-Explaining why a team was selected
-
-Example:
-“Predicted Network Team because similar VPN incidents were resolved there.”
-
-RAG Architecture
-This system follows RAG architecture.
-
-RAG means:
-Retriever + Generator
-
-Retriever:
-ChromaDB semantic search
-
-Generator:
-Gemma or Mistral LLM
-
-Benefits:
-
-Reduces hallucinations
-
-Uses organizational knowledge
-
-Improves prediction quality
-
-Provides explainability
-
-Technology Stack
-The project uses:
-
-Python
-
-Flask/FastAPI
-
-ChromaDB
-
-Sentence Transformers
-
-Transformers
-
-Torch
-
-Ollama
-
-Gemma/Mistral
-
-Pandas
-
-NumPy
-
-Why This Architecture Is Strong
-Key advantages:
-
-Semantic understanding
-The system understands meaning instead of keywords.
-
-Modular architecture
-Each agent has separate responsibility.
-Easy to debug and scale.
-
-Explainable AI
-The system explains why predictions are made.
-
-Local AI deployment
-Improves privacy and reduces dependency on cloud APIs.
-
-Hybrid knowledge system
-Combines historical incidents and KB documentation.
-
-Final Summary
-In summary, this project is an AI-driven intelligent ticket routing platform.
-
-It combines:
-
-Semantic search
-
-Vector databases
-
-Knowledge retrieval
-
-Local LLM reasoning
-
-RAG architecture
-
-to automatically predict the correct assignment group for IT support tickets with better accuracy, explainability, and automation.
+Explanation: Similar VPN incidents were previously resolved by Network Support.
+Matched with previous VPN access incidents handled by Network Team.
+```
+
+---
+
+*For questions or clarifications during the meeting, please refer to the agent-specific documentation in the `/agents` folder.*
+```
+
+This README is structured for a meeting presentation with:
+- Clear section headers for easy navigation
+- Tables for technology stack and agent responsibilities
+- Visual flow diagrams using ASCII art
+- Before/after examples
+- Bullet points for key takeaways
+- A one-line summary for quick recall
