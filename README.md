@@ -1,19 +1,11 @@
-# ARIA — Automated Routing and Intelligent Assignment
+# ARIA - Automated Routing and Intelligent Assignment
 
-An agentic AI pipeline that reads an IT support ticket description and predicts
-the correct assignment group using semantic search over historical tickets and a
+An agentic AI pipeline that takes a ticket short description as input
+and predicts the correct assignment group using semantic search over
+historical tickets **and KB articles / documents**, combined with a
 locally running LLM.
 
-**No ServiceNow connection needed. Everything runs locally on your machine.**
-
----
-
-## What It Does
-
-When a support ticket comes in, someone has to manually read it and decide which
-team handles it. With 125,000+ historical tickets across 23 assignment groups,
-this is slow and inconsistent. ARIA automates this entirely — type a ticket
-description, get an instant prediction with a confidence score.
+No ServiceNow connection needed. Runs entirely on your machine.
 
 ---
 
@@ -21,32 +13,31 @@ description, get an instant prediction with a confidence score.
 
 ```
 User types short description
-        │
-        ▼
-PreprocessingAgent
+        |
+        v
+Preprocessing Agent
   Clean text, remove ticket IDs, normalise whitespace
-        │
-        ▼
-EmbeddingAgent  (all-MiniLM-L6-v2 — runs locally, no API key)
-  Convert text to 384-dimensional vector
-        │
-        ▼
-KnowledgeBaseAgent  (ChromaDB)
-  Search 125,000 historical tickets stored as vectors
-  Return top 5 most semantically similar tickets
-        │
-        ▼
-LLMAgent  (Gemma 2B via Ollama — runs locally)
-  Read the 5 similar tickets and their assignment groups
+        |
+        v
+Embedding Agent  (sentence-transformers all-MiniLM-L6-v2)
+  Convert text to 384-dimensional vector. Runs locally. No API key.
+        |
+        v
+ChromaDB Vector Search
+  Search historical tickets AND KB articles stored as embeddings
+  Return top 5 most semantically similar results (tickets + docs mixed)
+        |
+        v
+LLM Agent  (Mistral or Gemma via Ollama - runs locally)
+  Read similar tickets AND relevant KB article chunks
   Reason about which group best fits the new ticket
-  If LLM unavailable → weighted similarity vote fallback
-        │
-        ▼
+        |
+        v
 Predicted Assignment Group
-  + Confidence score (1–10)
-  + Confidence label (HIGH / MEDIUM / LOW)
-  + Which similar tickets influenced the decision
-  + Similarity scores (1–10)
+  + confidence level
+  + which similar tickets / KB articles matched
+  + similarity scores
+  + source type ([csv] ticket or [doc] article)
 ```
 
 ---
@@ -54,102 +45,98 @@ Predicted Assignment Group
 ## Project Structure
 
 ```
-HaviAgenticServiceAssignment/
-│
-├── predict.py                    ← Run this for interactive predictions
-├── build_knowledge_base.py       ← Run once to load CSV into ChromaDB
-├── install.py                    ← Install all dependencies
-├── requirements.txt
-│
-├── agents/
-│   ├── preprocessing_agent.py    ← Text cleaning
-│   ├── embedding_agent.py        ← Sentence transformer embeddings
-│   ├── knowledge_base_agent.py   ← ChromaDB build and search
-│   └── llm_agent.py              ← Ollama LLM reasoning + fallback voting
-│
-├── config/
-│   └── config.yaml               ← Model settings, assignment groups
-│
-└── data/
-    ├── training_tickets.csv      ← Your ServiceNow CSV export (you provide this)
-    └── chroma_db/                ← ChromaDB vector storage (auto-created)
+aria/
+|
+|-- predict.py                          <- Run this for the interactive prompt
+|-- build_knowledge_base.py             <- Load CSV tickets into ChromaDB
+|-- build_knowledge_base_docs.py        <- Load KB articles into ChromaDB  (NEW)
+|
+|-- agents/
+|   |-- preprocessing_agent.py         <- Text cleaning
+|   |-- embedding_agent.py             <- Sentence transformer embeddings
+|   |-- knowledge_base_agent.py        <- ChromaDB build and search
+|   |-- llm_agent.py                   <- Ollama LLM reasoning
+|   |-- document_ingestion_agent.py    <- KB document reader & chunker  (NEW)
+|
+|-- config/
+|   |-- config.yaml                    <- Model settings, assignment groups
+|
+|-- data/
+|   |-- training_tickets.csv           <- Your 1-year ServiceNow CSV export
+|   |-- kb_docs/                       <- KB articles folder  (NEW)
+|   |   |-- vpn_guide.md
+|   |   |-- sap_access_faq.txt
+|   |   |-- network_troubleshooting.pdf
+|   |   |-- IT-Service Desk/           <- Sub-folder = auto team tag
+|   |       |-- password_reset.md
+|   |-- chroma_db/                     <- ChromaDB storage (auto-created)
+|
+|-- requirements.txt
 ```
 
 ---
 
 ## Requirements
 
-- Python 3.10 or above
-- Windows / macOS / Linux
-- 8 GB RAM minimum (16 GB recommended)
-- ~3 GB free disk space (model + vector DB)
+### Python Version
 
----
+Python 3.10 or above required.
 
-## Installation
+### Install Ollama (local LLM runtime)
 
-### Step 1 — Install Python dependencies
+Ollama runs the LLM entirely on your machine. No API key needed.
 
-```
-python install.py
-```
-
-Or manually:
-
-```
-pip install -r requirements.txt
-```
-
-### Step 2 — Set HuggingFace token (required for model download)
-
-The embedding model downloads from HuggingFace on first run. A free token
-is required to avoid rate limiting.
-
-1. Sign up free at https://huggingface.co
-2. Go to **Settings → Access Tokens → New token** (Read access)
-3. Copy the token (starts with `hf_...`)
-
-**Windows:**
-```
-setx HF_TOKEN "hf_your_token_here"
-```
-Then close and reopen your command prompt.
-
-**macOS / Linux:**
-```
-export HF_TOKEN="hf_your_token_here"
-```
-
-### Step 3 — Install Ollama (local LLM runtime)
-
-Download and install from https://ollama.com
+Download from https://ollama.com and install for your OS.
 
 Then pull the model:
+
+```
+ollama pull mistral
+```
+
+Or for a lighter model (less RAM):
 
 ```
 ollama pull gemma:2b
 ```
 
-> If you have more RAM available, `mistral` gives better accuracy:
-> `ollama pull mistral`
+### Install Python packages
+
+```
+pip install -r requirements.txt
+```
+
+Full list:
+```
+sentence-transformers   sentence embedding model
+faiss-cpu               vector similarity (used internally)
+chromadb                persistent vector database
+ollama                  Python client for local Ollama LLM
+pandas                  CSV reading
+numpy                   numerical operations
+pyyaml                  config file reading
+pypdf                   PDF document support  (NEW, optional)
+beautifulsoup4          HTML document support (NEW, optional)
+```
 
 ---
 
 ## Setup Steps
 
-### Step 1 — Prepare your CSV
+### Step 1 - Prepare your CSV
 
-Place your ServiceNow export at: `data/training_tickets.csv`
+Your CSV must have these columns:
 
-The CSV must have exactly these column names:
+| Column            | Required | Description                       |
+|-------------------|----------|-----------------------------------|
+| Short Description | Yes      | Ticket subject - main signal      |
+| Description       | Yes      | Ticket body - additional context  |
+| Assignment Team   | Yes      | Which team resolved it - label    |
 
-| Column | Required | Description |
-|---|---|---|
-| `Short Description` | Yes | Ticket subject — main signal |
-| `Description` | Yes | Ticket body — additional context |
-| `Assignment Team` | Yes | Which team resolved it — the label |
+Place it at:  data/training_tickets.csv
 
-**ServiceNow export query:**
+For production, export 1 year of resolved tickets from ServiceNow:
+
 ```
 Table   : incident
 Filter  : resolved_at in the last 12 months
@@ -159,60 +146,100 @@ Fields  : short_description, description, assignment_group
 Format  : CSV
 ```
 
-Rename columns after export:
+Rename the columns:
 ```
-short_description  →  Short Description
-description        →  Description
-assignment_group   →  Assignment Team
-```
-
-### Step 2 — Update assignment groups in config
-
-Edit `config/config.yaml` and update the `assignment_groups` list to match
-your exact ServiceNow group names:
-
-```yaml
-assignment_groups:
-  - "IT-Service Desk"
-  - "IT-Portal-Central"
-  - "IT-Wintel Support"
-  - "IT-SC GBS App Support"
-  # ... add all your groups here
+short_description -> Short Description
+description       -> Description
+assignment_group  -> Assignment Team
 ```
 
-> **Note:** Adding a new group later? Just add it to this list and run
-> `predict.py` — no rebuild needed, as long as tickets for that group are
-> already in the CSV that was used for the knowledge base build.
+### Step 2 - Update assignment groups in config
 
-### Step 3 — Build the knowledge base
+Edit config/config.yaml and update the assignment_groups list to match
+your exact ServiceNow group names.
 
-The knowledge base is built **once** and saved to disk. This is the most
-time-consuming step (~25–35 minutes for 125,000 tickets on an 8GB machine).
+### Step 3 - Build the knowledge base from CSV
 
-**On machines with limited RAM, load in batches of 10,000:**
+Run once. This embeds all CSV tickets into ChromaDB.
+
+```
+python build_knowledge_base.py
+```
+
+Supports incremental loading in chunks of 10,000 rows:
 
 ```
 python build_knowledge_base.py --start 0     --end 10000
 python build_knowledge_base.py --start 10000 --end 20000
-python build_knowledge_base.py --start 20000 --end 30000
 ```
 
-Each run appends to the existing knowledge base — nothing is overwritten.
-The script will print the exact next command to run at the end of each batch.
-
-**On machines with plenty of RAM, load everything at once:**
-
-```
-python build_knowledge_base.py --start 0 --end 125000
-```
-
-**To wipe and rebuild from scratch:**
+To wipe and rebuild from scratch:
 
 ```
 python build_knowledge_base.py --rebuild
 ```
 
-### Step 4 — Start predicting
+### Step 4 - Add KB Articles / Documents  (NEW)
+
+Place your knowledge-base articles and runbooks in data/kb_docs/.
+Supported formats: .txt  .md  .pdf  .html
+
+```
+data/kb_docs/
+  vpn_troubleshooting.md
+  sap_password_reset.txt
+  network_guide.pdf
+  IT-Service Desk/          <- folder name = auto team tag
+    onboarding_checklist.md
+```
+
+#### Optional: Tag documents with the target team
+
+Add a team tag on the first line of any document:
+
+```
+TEAM: IT-Network Support
+VPN Troubleshooting Guide
+...
+```
+
+Recognised tag formats:
+```
+TEAM: IT-Service Desk
+Assignment Group: IT-Network Support
+Group: IT-Wintel Support
+```
+
+Or place the file in a sub-folder named after the team — the folder
+name is used as the team tag automatically.
+
+#### Ingest documents into ChromaDB:
+
+```
+python build_knowledge_base_docs.py
+```
+
+With a custom folder:
+```
+python build_knowledge_base_docs.py --docs-path path/to/articles
+```
+
+Wipe existing document chunks and re-ingest:
+```
+python build_knowledge_base_docs.py --rebuild-docs
+```
+
+List what is currently stored:
+```
+python build_knowledge_base_docs.py --list
+```
+
+Documents and CSV tickets share the same ChromaDB collection. Both
+are returned in search results, ranked by semantic similarity. The
+result table shows [csv] for ticket matches and [doc] for article
+matches so you can see the source at a glance.
+
+### Step 5 - Start the interactive prompt
 
 ```
 python predict.py
@@ -228,7 +255,7 @@ python predict.py
 python predict.py
 ```
 
-Example output:
+Example session:
 
 ```
 ============================================================
@@ -236,39 +263,34 @@ Example output:
 ============================================================
 
   Embedding model  : all-MiniLM-L6-v2
-  LLM model        : gemma:2b via Ollama
+  LLM model        : mistral via Ollama
   Assignment groups: 23
-  Knowledge base   : 125000 tickets loaded
-  LLM              : gemma:2b (Ollama running)
+  Knowledge base   : 1247 tickets loaded
+  LLM              : mistral (Ollama running)
 
-  Type a ticket short description to get the assignment group.
-  Type 'exit' or press Ctrl+C to quit.
+  ----------------------------------------------------------
+  Ticket description: VPN not connecting from home office
 
-  --------------------------------------------------------
-  Ticket description: Issue with HaviConnect website
-
-  ========================================================
+  ==========================================================
   PREDICTION RESULT
-  ========================================================
+  ==========================================================
 
-  Ticket       : Issue with HaviConnect website
-  Assignment   : IT-Portal-Central
-  Confidence   : HIGH  |  Score: 8/10  (4 of 5 similar tickets matched)
+  Ticket       : VPN not connecting from home office
+  Assignment   : IT-Network Support
+  Confidence   : HIGH (3 of 5 similar tickets matched)
 
-  Similar historical tickets used:
+  Similar historical tickets and KB articles used:
 
-  Rank  Short Description                    Assignment Group       Similarity (1-10)
-  ----- ------------------------------------ ---------------------- -----------------
-  1.    Issue with HaviConnect Website       IT-Portal-Central  <-- 8.9
-  2.    I can't access the havi connect...   IT-Service Desk        8.1
-  3.    HAVI connect issue                   IT-Portal-Central  <-- 7.6
-  4.    Problem with haviconnect app...      IT-Portal-Central  <-- 7.5
-  5.    HaviConnect Be                       IT-Portal-Central  <-- 7.2
-
-  ========================================================
+  Rank  Short Description                                 Assignment Group                    Similarity Source
+  ----- ------------------------------------------------ ----------------------------------- ---------- --------
+  1.    VPN connection dropping after 10 minutes          IT-Network Support                  9.2        [csv]  <--
+  2.    VPN Troubleshooting Guide (part 1)                IT-Network Support                  8.9        [doc]  <--
+  3.    SSL VPN certificate error on login page           IT-Network Support                  8.4        [csv]  <--
+  4.    Cannot reach internal file share from remote      IT-Wintel Support                   8.1        [csv]
+  5.    Firewall rule blocking new SaaS application       IT-Network Support                  7.9        [csv]  <--
 ```
 
-### Single prediction mode (for scripting or testing)
+### Single prediction mode (for scripting)
 
 ```
 python predict.py --once "SAP workflow approval stuck"
@@ -276,191 +298,276 @@ python predict.py --once "SAP workflow approval stuck"
 
 ---
 
-## Confidence Score
-
-Every prediction includes a score from **1 to 10** and a label:
-
-| Score | Label | Meaning |
-|---|---|---|
-| 7 – 10 | HIGH | Strong agreement — high confidence in prediction |
-| 4 – 6 | MEDIUM | Some agreement — prediction likely correct |
-| 1 – 3 | LOW | Split evidence — recommend human review |
-
-The score is calculated by **weighted similarity voting** — each of the top 5
-similar tickets votes for its assignment group, weighted by its similarity score.
-The winning group's share of total weighted votes maps to the 1–10 scale.
-
----
-
-## Models & Tools
-
-| Component | Model / Tool | Purpose |
-|---|---|---|
-| Embedding | `all-MiniLM-L6-v2` | Converts ticket text to 384-dim vectors |
-| Vector DB | `ChromaDB` | Stores and searches 125k ticket vectors |
-| LLM | `Gemma 2B via Ollama` | Reasons over similar tickets to predict group |
-
-### Embedding model — `all-MiniLM-L6-v2`
-- Made by Microsoft, free on HuggingFace
-- Downloads once (~90 MB), cached locally after that
-- Runs fully locally — no internet needed after first download
-
-### LLM — `Gemma 2B via Ollama`
-- Made by Google, runs locally via Ollama
-- No API calls, no cloud costs, no data leaving the machine
-- Requires ~2 GB RAM
-
-### Available LLM options
-
-| Model | RAM Required | Notes |
-|---|---|---|
-| `gemma:2b` | ~2 GB | Default — good balance |
-| `mistral` | ~4 GB | Best accuracy |
-| `llama3.2` | ~2 GB | Good alternative |
-| `phi3` | ~1.5 GB | Lightest option |
-
-Change the model in `config/config.yaml` then run `ollama pull <model-name>`.
-
----
-
 ## Configuration Reference
 
-`config/config.yaml`:
+config/config.yaml:
 
 ```yaml
 embedding:
-  model: "all-MiniLM-L6-v2"      # downloads once (~90MB), cached locally
+  model: "all-MiniLM-L6-v2"     # runs locally, downloads once (~90MB)
 
 vector_db:
-  path: "data/chroma_db"          # where ChromaDB stores its files
-  collection: "snow_tickets"      # collection name inside ChromaDB
-  top_k: 5                        # how many similar tickets to retrieve
+  path: "data/chroma_db"         # where ChromaDB stores its files
+  collection: "snow_tickets"     # collection name
+  top_k: 5                       # how many similar results to retrieve
 
 llm:
   provider: "ollama"
-  model: "gemma:2b"               # change to "mistral" for better accuracy
-  temperature: 0.1                # low = more consistent, deterministic output
+  model: "mistral"               # or "gemma:2b" for lighter model
+  temperature: 0.1               # lower = more consistent output
   max_tokens: 512
 
 data:
   csv_path: "data/training_tickets.csv"
+  docs_path: "data/kb_docs"      # folder with KB articles (NEW)
+
+docs:                            # NEW - document chunking settings
+  chunk_size: 400                # words per chunk
+  chunk_overlap: 80              # overlapping words between chunks
 
 assignment_groups:
   - "IT-SC-EPAM-SAP-AMS-Support"
-  - "IT-SC-EPAM-SAP Basis Support"
-  - "IT-SC-EPAM-SAP Workflow"
-  - "IT-SC-EPAM-SAP Hybris CRM Support"
-  - "IT-SC GBS App Support"
-  - "IT-Unix/Linux Support"
-  - "IT-SC Operations Application Support"
-  - "IT-INFOR-WMS"
-  - "IT-Azure RBAC Team"
-  - "IT-ERP JDE Technical"
-  - "IT-Service Desk"
-  - "IT-Reporting Services"
-  - "IT-Wintel Support"
-  - "IT-HMDP Support"
-  - "IT-Portal-Central"
-  - "IT-Digital-Delivery"
-  - "IT-SCT Integrations COE team"
-  - "IT-Messaging Support"
-  - "HAVI Digital Workplace"
-  - "IT-tms-I&O-Identity-Collab-End Point Support"
-  - "IT-Intune Support"
-  - "IT-AVD Support"
-  - "IT-OB Operations"
+  ...
 ```
+
+---
+
+## KB Document Ingestion - How It Works
+
+### Supported file types
+
+| Type     | Extension     | Extra library needed         |
+|----------|---------------|------------------------------|
+| Text     | .txt          | none                         |
+| Markdown | .md           | none                         |
+| PDF      | .pdf          | pip install pypdf             |
+| HTML     | .html / .htm  | pip install beautifulsoup4    |
+
+### Chunking
+
+Long articles are automatically split into overlapping chunks so that
+the sentence-transformer model can embed each piece meaningfully.
+
+Default: 400-word chunks with 80-word overlap between consecutive chunks.
+Adjust in config.yaml under the docs: section or via CLI flags:
+
+```
+python build_knowledge_base_docs.py --chunk-size 300 --chunk-overlap 60
+```
+
+### Team tagging
+
+Three ways to associate a document with an assignment group:
+
+1. Front-matter tag on the first line of the file:
+   TEAM: IT-Network Support
+
+2. Sub-folder name:
+   data/kb_docs/IT-Network Support/vpn_guide.md
+
+3. No tag - document is ingested without a team tag.
+   The LLM will still use it as context but cannot use it
+   as a direct team hint.
+
+### Upsert behaviour
+
+Documents use stable IDs derived from filename + chunk index.
+Re-running build_knowledge_base_docs.py without --rebuild-docs
+will upsert - updating existing chunks if content changed, without
+duplicating them.
 
 ---
 
 ## Adding New Assignment Groups
 
-If the new group's tickets are **already in the CSV that was used to build
-the knowledge base:**
+Step 1 - Add the group name to config/config.yaml under assignment_groups
 
-1. Add the group name to `config/config.yaml` under `assignment_groups`
-2. Run `predict.py` — done. No rebuild needed.
+Step 2 - Add resolved tickets for that group to data/training_tickets.csv
+         AND/OR add KB articles for that group to data/kb_docs/
 
-If the new group's tickets are **not yet in the knowledge base:**
+Step 3 - Rebuild
 
-1. Add the new tickets to `data/training_tickets.csv`
-2. Add the group name to `config/config.yaml`
-3. Rebuild: `python build_knowledge_base.py --rebuild`
+```
+python build_knowledge_base.py --rebuild
+python build_knowledge_base_docs.py --rebuild-docs
+```
+
+No model retraining needed.
 
 ---
 
-## Fallback Behaviour
+## How It Works in Detail
 
-If Ollama is not running or the LLM is unavailable, the system automatically
-falls back to **weighted similarity voting**:
+### Why sentence-transformers instead of keyword matching
 
-- Each of the top 5 similar tickets votes for its assignment group
-- Each vote is weighted by that ticket's similarity score
-- The group with the highest total weighted score wins
-- The output shows `Note: LLM unavailable - used weighted similarity vote`
+Keyword matching fails on tickets like "user cannot get into the
+system" which means the same as "login failing". Sentence transformers
+understand semantic meaning so similar intent tickets are retrieved
+even when the exact words are different. KB articles written in prose
+are found even if the user's ticket uses different terminology.
 
-Predictions still work correctly in fallback mode.
+### Why ChromaDB
+
+ChromaDB stores the embeddings on disk so the expensive embedding step
+only happens once during build. Queries are fast because ChromaDB uses
+HNSW approximate nearest neighbour search.
+
+### Why a local LLM instead of OpenAI
+
+Your ticket data stays on your machine. No data leaves your network.
+Ollama runs Mistral or Gemma locally. No API key, no cost, no
+data privacy concern.
+
+### How the LLM uses KB articles
+
+The LLM receives both historical ticket matches AND document chunk
+matches. Document chunks give the LLM extra prose context - for
+example, a runbook saying "VPN issues should be routed to
+IT-Network Support" provides a strong signal even if historical
+ticket matches are sparse.
+
+### Fallback if Ollama is not running
+
+If Ollama is not available, the system falls back to a weighted
+similarity vote from the top-K results (tickets + documents combined).
+Confidence is shown as LOW.
 
 ---
 
 ## Troubleshooting
 
-**`memory allocation failed` during build**
+**Knowledge base is empty after build_knowledge_base.py**
 
-Use the incremental batch approach to load 10,000 rows at a time:
+Check the CSV column names match exactly:
+- Short Description (capital S and D)
+- Description
+- Assignment Team
+
+**No documents found after build_knowledge_base_docs.py**
+
+Check the docs folder exists and contains supported files:
 ```
-python build_knowledge_base.py --start 0 --end 10000
-```
-
-**`401 Unauthorized` when downloading embedding model**
-
-Set your HuggingFace token (see Installation Step 2), then close and reopen
-your command prompt before running again. Also delete the corrupt cache:
-```
-# Windows
-rmdir /s /q C:\Users\<YourUsername>\.cache\huggingface
-
-# macOS / Linux
-rm -rf ~/.cache/huggingface
+python build_knowledge_base_docs.py --list
 ```
 
-**Knowledge base is empty after build**
+**PDF ingestion fails**
 
-Check CSV column names match exactly (case-sensitive):
-- `Short Description`
-- `Description`
-- `Assignment Team`
+```
+pip install pypdf
+```
 
-**LLM not found or Ollama not running**
+**HTML tags appearing in document chunks**
+
+```
+pip install beautifulsoup4
+```
+
+**LLM returning wrong group names**
+
+Check that config.yaml group names exactly match the Assignment Team
+column values in your CSV.
+
+**Ollama not found or model not available**
 
 ```
 ollama serve
 ollama list
-ollama pull gemma:2b
+ollama pull mistral
 ```
 
-**Prediction returns wrong group**
+**Out of memory when running Mistral**
 
-Check that the group name in `config/config.yaml` exactly matches the
-`Assignment Team` value in your CSV — spelling, spacing, and capitalisation
-must be identical.
-
-**Build is slow**
-
-Increase batch size if RAM allows. Edit `build_knowledge_base.py` and change:
-```python
-parser.add_argument("--end", type=int, default=10000, ...)
+Switch to a lighter model in config/config.yaml:
+```yaml
+llm:
+  model: "gemma:2b"
 ```
-Use `--end 20000` or `--end 50000` per run if the machine has enough free RAM.
+
+Then: ollama pull gemma:2b
 
 ---
 
-## Key Benefits
+## RLHF — Reinforcement Learning from Human Feedback
 
-- **Runs entirely locally** — no cloud costs, no data leaving the network
-- **Instant predictions** — under 1 second per ticket after setup
-- **One-time knowledge base build** — saved to disk, reused forever
-- **Explainable** — every prediction shows which historical tickets influenced it
-- **Fallback safe** — works correctly even without the LLM
-- **Incremental loading** — build the knowledge base in batches on low-RAM machines
-- **Scalable** — more historical data means more accurate predictions
+ARIA now learns from every human correction using a three-stage RLHF loop.
+
+### How it works
+
+```
+Stage 1 — Collect feedback
+  After every prediction:
+    "Was this correct? (y/n/skip)"
+    Saved to data/rlhf_feedback.jsonl
+    y  -> reward +1.0  (confirmed_correct)
+    n  -> reward -1.0  (confirmed_wrong) + user types correct group
+    s  -> skipped
+
+Stage 2 — Compute reward signal
+  python rlhf_train.py --compute-rewards
+  Per-group accuracy tracked in data/rlhf_rewards.json
+  Groups with accuracy < 40% and >= 5 attempts are flagged
+
+Stage 3 — Policy update (two mechanisms)
+
+  3A  Embedding reinforcement
+      python rlhf_train.py --apply
+      confirmed_correct -> upserted into ChromaDB as [rlhf+] positive anchors
+      confirmed_wrong   -> upserted as [rlhf~] correction anchors with correct group
+      Future similar queries rank these entries alongside CSV tickets
+
+  3B  Prompt bias injection  (automatic, no command needed)
+      Low-accuracy groups loaded at predict.py startup from rlhf_rewards.json
+      A CAUTION block is added to the LLM prompt for flagged groups:
+        "Only assign to these groups if similarity >= 8/10"
+      This nudges the LLM away from groups it historically confuses
+```
+
+### Source labels in results table
+
+  [csv]    historical CSV ticket
+  [doc]    KB article chunk
+  [rlhf+]  confirmed-correct RLHF anchor (positive reinforcement)
+  [rlhf~]  human-corrected RLHF anchor (negative correction)
+
+### Weekly workflow
+
+```
+# All week — users give feedback after predictions automatically
+python predict.py
+
+# Weekly — push feedback into KB and update reward stats
+python rlhf_train.py --apply
+python rlhf_train.py --compute-rewards
+
+# Review accuracy report
+python rlhf_train.py --report
+
+# Export feedback log to CSV
+python rlhf_train.py --export data/rlhf_export.csv
+
+# Clean up unrated entries
+python rlhf_train.py --clear-pending
+
+# Disable RLHF prompts for a session
+python predict.py --no-rlhf
+```
+
+### New files added
+
+```
+agents/rlhf_agent.py    — feedback collection, reward computation, KB upsert
+rlhf_train.py           — CLI to apply/report/export RLHF data
+data/rlhf_feedback.jsonl — auto-created, append-only prediction log
+data/rlhf_rewards.json   — auto-created, per-group reward stats
+```
+
+### Configuration (config/config.yaml)
+
+```yaml
+rlhf:
+  feedback_path: "data/rlhf_feedback.jsonl"
+  rewards_path:  "data/rlhf_rewards.json"
+  enabled: true
+  caution_min_attempts: 5    # min predictions before flagging a group
+  caution_max_accuracy: 0.4  # flag groups with accuracy below this threshold
+```

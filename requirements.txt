@@ -1,11 +1,44 @@
-# Run: python install.py
-# Do NOT run pip install -r requirements.txt directly
-# because torch needs a special index URL for CPU-only version
+# ─────────────────────────────────────────────────────────────────────────────
+# ARIA — Python dependencies
+#
+# DO NOT run: pip install -r requirements.txt directly
+# INSTEAD run: python install.py
+#
+# Reason: PyTorch requires a special --index-url for the CPU-only build.
+#         install.py handles this automatically AND creates a virtual
+#         environment at .venv/ so packages don't pollute your system Python.
+#
+# install.py installs every package listed here. This file is the single
+# source of truth for all dependencies.
+# ─────────────────────────────────────────────────────────────────────────────
 
-sentence-transformers>=2.7.0
-faiss-cpu>=1.8.0
-chromadb>=0.5.0
-ollama>=0.2.0
-pandas>=2.0.0
-numpy>=1.26.0
-pyyaml>=6.0.0
+# ── Embedding & vector search ─────────────────────────────────────────────────
+sentence-transformers>=2.7.0   # local sentence embeddings (all-mpnet-base-v2)
+faiss-cpu>=1.8.0               # fast vector similarity (used by sentence-transformers)
+chromadb>=0.5.0                # persistent vector database (stores ticket embeddings)
+
+# ── Ollama client ─────────────────────────────────────────────────────────────
+ollama>=0.2.0                  # Python client for local Ollama LLM server
+
+# ── LangChain — LLM orchestration, token tracking, async support ─────────────
+langchain>=0.3.0               # core LangChain framework
+langchain-core>=0.3.0          # LCEL, callbacks, output parsers
+langchain-ollama>=0.2.0        # LangChain ↔ Ollama bridge (ChatOllama)
+
+# ── Web framework ─────────────────────────────────────────────────────────────
+flask>=3.0.0                   # web UI (app.py)
+
+# ── Data processing ───────────────────────────────────────────────────────────
+pandas>=2.0.0                  # CSV reading for training tickets
+numpy>=1.26.0                  # numerical operations
+pyyaml>=6.0.0                  # config/config.yaml loading
+
+# ── KB document ingestion (optional — needed for build_knowledge_base_docs.py)─
+pypdf>=4.0.0                   # read .pdf KB articles
+beautifulsoup4>=4.12           # read .html KB articles
+
+# ── PyTorch (CPU only) ────────────────────────────────────────────────────────
+# install.py handles this separately with:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+# This avoids downloading the 2GB GPU build that pip would pick by default.
+# torch>=2.0.0

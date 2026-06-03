@@ -1,0 +1,90 @@
+TEAM: IT-Messaging Support
+
+IT-Messaging Support provides support for issues related to MFA, email, Teams, SharePoint, OneDrive, Mailing lists, Office apps, etc.
+
+MFA / Multi-factor Authentication:
+1. MFA Reset requests
+2. Can't set up MFA
+3. Reset MFA
+4. MFA is disabled
+5. O365 / Teams and other apps stopped working at the MFA step on some devices
+6. MFA reset for a specific user (***)
+7. [location] | MFA authentication asks three times in a row
+8. Reset MFA for a user (***)
+9. MFA reset request for a user account (***)
+10. MFA issue after device change for a user (***)
+
+Email / Outlook / Exchange (mailbox, delivery, provisioning)
+1. Office 365 issues for a user (***)
+2. Urgent: email not provisioned for a new user (created in tasks but not available)
+3. Shared mailbox not updating (***)
+4. Email change request
+5. Unable to receive group mail in Outlook
+6. No access to a shared mailbox (***)
+7. Mailing list delivery issue (list name ***)
+8. Error message on a mail account (***)
+9. Sudden inability to receive mail from an external vendor
+10. Emails not coming through to intended recipients from supplier
+
+Calendar & Meetings (invites, cancellations, conflicts, sync)
+1. Outlook meetings cannot be canceled
+2. Issue when accepting new time/date proposal on meeting requests
+3. Teams invitations cannot be canceled by the requester
+4. Calendar invites showing conflict errors
+5. General Outlook calendar issue
+6. Error in Outlook calendar entries
+7. Outlook calendar sync issues
+8. Unable to open a meeting in Outlook that I created
+9. Conflict sending invitations from Outlook
+10. Meeting room booking cannot be cancelled
+
+Teams & Voice (sign-in, calls, unknown callers)
+1. User cannot sign in to Teams (also affects Outlook access)
+2. Teams application does not open / overall Teams issues
+3. User can make calls but cannot receive calls from external suppliers
+4. Unknown/unauthenticated Teams callers reported
+5. Outgoing Teams calls to external numbers failing
+6. User not found in Teams directory
+7. External calls issue (general)
+8. Teams chat contact message reported with timestamp
+9. Teams invitations / appointment cancellation issues (Teams side)
+
+SharePoint / OneDrive / File Access & Sync
+1. Access required to a file owned by a former employee (***)
+2. Cannot access a SharePoint site inside Teams (***)
+3. Cannot sync a folder in Teams
+4. SharePoint account deleted together with an important file
+5. OneDrive synchronization stopped after a password change
+6. General OneDrive sync issue
+7. Access to former employee OneDrive (***)
+8. Request to reset OneDrive sync for a user (***)
+
+Identity & Access / Azure AD / Provisioning / Deprovisioning
+1. New contractor accounts in internal domain failing to authenticate (internal domain ***)
+2. Entra ID / Azure AD account deleted by lifecycle management incorrectly
+3. Cannot add user to an email group (group name ***)
+4. Add user to transport group (request)
+5. User not found in Teams (directory/provisioning issue)
+6. Onboarding: email addresses not in place after provisioning
+7. Deprovisioning: access still required for former employee resources
+8. Account provisioning errors for multiple new users
+
+Security Alerts & Threats
+1. Security alert: repeated login failures / same-username login anomalies (alert system)
+2. Security alert: threat messages detected by secure email gateway (ProofPoint or equivalent)
+3. Azure Sentinel critical security alert — Log4j/Log4Shell related IOC reported
+4. Suspected unauthorized email sent from a mailbox (user-reported)
+5. Repeated security alerts of the same type (investigation requested)
+
+Office Apps / Excel / Reporting Tools
+1. Excel file freezing during use
+2. Reporting tools application cannot be opened
+3. Secure email / secure document portal access issue (ambiguous)
+
+Distribution Lists / Transport Groups / Mailing Lists
+1. Mailing list delivery or subscription issue (list name ***)
+2. Cannot add user to an email group (group name ***)
+3. Add user to transport group for mail flow (request)
+4. Unable to receive group mail in Outlook
+5. Supplier emails not delivered to intended distribution group
+6. No access to a shared administrative mailbox (***)

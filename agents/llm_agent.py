@@ -1,38 +1,22 @@
 """
 LLM Agent
 ----------
-Uses a locally running LLM via Ollama to reason over the retrieved
-similar tickets and predict the correct assignment group.
+Uses a locally running LLM via Ollama to reason over retrieved similar
+tickets and predict the correct assignment group.
 
-The LLM receives:
-  - The user's ticket short description
-  - The top-K most similar historical tickets with their assignment groups
-  - The full list of valid assignment groups
-
-It must return ONLY the assignment group name from the valid list.
-
-Model options (set in config/config.yaml):
-  mistral     - Best accuracy, ~4GB RAM
-  gemma:2b    - Lighter, ~2GB RAM, slightly less accurate
-  llama3.2    - Good balance, ~2GB RAM
-
-Install Ollama: https://ollama.com
-Then run: ollama pull gemma:2b
-
-Confidence Score (1-10):
-  The score is computed from weighted similarity votes (each similar ticket
-  contributes its similarity score as a vote weight for its group).
-
-  score = (weighted_share_of_winning_group) mapped onto 1-10:
-    >= 0.90  -> 10    (near-unanimous, all top matches agree)
-    >= 0.75  -> 8-9   (strong majority)
-    >= 0.55  -> 6-7   (moderate majority)
-    >= 0.40  -> 4-5   (weak majority / split evidence)
-    <  0.40  -> 1-3   (very split / low similarity)
-
-  HIGH   : score 7-10
-  MEDIUM : score 4-6
-  LOW    : score 1-3
+Accuracy improvements in this version:
+  1. Stronger system prompt — explicit few-shot style instructions that
+     work better with smaller models (gemma3:4b, gemma:2b).
+  2. Description context in prompt — the top-3 most similar tickets now
+     include their description snippet (not just short_description).
+     This gives the LLM more evidence to distinguish ambiguous tickets.
+  3. Top-group hint — the weighted-vote winner is shown to the LLM as a
+     suggested answer. The LLM can override it but has a strong anchor.
+  4. gemma4 support — works with any Ollama model including gemma4.
+  5. RLHF Stage 3B prompt bias injection (caution_groups) preserved.
+  6. Fixed for ollama >= 0.6.1 (Pydantic response objects).
+  7. temperature=0.0 by default for fully deterministic output.
+  8. Broadened IT ticket definition — security/spam/phishing now included.
 """
 
 import logging
@@ -42,80 +26,116 @@ import ollama
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are an IT service desk routing assistant.
+# ─────────────────────────────────────────────────────────────────────────────
+# System prompt
+# ─────────────────────────────────────────────────────────────────────────────
 
-Your job is to read a support ticket and decide which IT team should handle it.
+SYSTEM_PROMPT = """You are an expert IT service desk ticket routing assistant at HAVI.
 
-You will be given:
-1. The ticket short description submitted by the user
-2. Similar historical tickets that were successfully resolved, each showing which team handled it
-3. A list of all valid assignment groups
+Your ONLY job is to read a support ticket and output the correct assignment group name.
 
-Rules:
-- You MUST respond with ONLY the assignment group name
-- The assignment group MUST be exactly one from the valid list provided
-- Do not add any explanation, punctuation, or extra text
-- Base your decision on the patterns from the similar historical tickets
-- Weight higher-similarity tickets more heavily in your decision
-- If the ticket is ambiguous, pick the most likely group based on the weighted evidence
+CRITICAL INSTRUCTIONS:
+
+1. OUTPUT FORMAT
+   Output EXACTLY ONE line: the assignment group name, nothing else.
+   No explanation. No "I think". No punctuation after the name. Just the name.
+
+2. NOT AN IT TICKET
+   Only output NOT_IT_TICKET if the input is completely unrelated to IT —
+   for example: random words, greetings, personal matters, or gibberish.
+
+   The following ARE valid IT tickets — do NOT reject them:
+   - Spam email, phishing email, suspicious email, junk mail
+   - Virus, malware, ransomware, suspicious attachment
+   - Email not working, mailbox full, Outlook issues
+   - Password reset, account locked, access denied
+   - VPN issues, network connectivity, Wi-Fi problems
+   - Software installation, hardware fault, printer issues
+   - SAP, HaviConnect, or any business application issues
+   - Any security incident or cyber threat report
+
+   When in doubt, route the ticket — do NOT reject it.
+
+3. USE THE EVIDENCE
+   You will see similar historical tickets with their correct assignment groups.
+   The ticket marked [TOP-VOTE] is the statistical best match — trust it unless
+   another group has significantly stronger similarity scores.
+
+4. EXACT GROUP NAME
+   Copy the group name character-for-character from the VALID ASSIGNMENT GROUPS list.
+   Never invent, shorten, or paraphrase a group name.
+
+5. WHEN UNSURE
+   Pick the group with the most and highest-similarity matching tickets.
+   Default to IT-Service Desk only if NO evidence points to any other group.
 """
+
+VALIDATION_PROMPT = """Is the following text a genuine IT support ticket?
+A genuine IT ticket describes a technical problem, system issue, access issue,
+software/hardware fault, security incident, spam/phishing email, or IT service request.
+Reply with YES or NO only.
+Text: """
 
 
 class LLMAgent:
 
-    def __init__(self, model: str = "gemma", temperature: float = 0.1):
+    def __init__(self, model: str = "gemma3:4b", temperature: float = 0.0):
         self.model       = model
         self.temperature = temperature
 
-    # ------------------------------------------------------------------
+    # ─────────────────────────────────────────────────────────────────────────
     # Public API
-    # ------------------------------------------------------------------
+    # ─────────────────────────────────────────────────────────────────────────
 
     def predict(
         self,
         short_description: str,
-        similar_tickets: list[dict],
-        valid_groups: list[str],
+        similar_tickets:   list[dict],
+        valid_groups:      list[str],
+        caution_groups:    list[str] = None,
     ) -> dict:
-        """
-        Ask the LLM to predict the assignment group.
-
-        Returns:
-            {
-                "assignment_group": "IT-SC-EPAM-SAP Workflow",
-                "confidence":       "high",
-                "confidence_score": 8,          # 1-10
-                "match_count":      3,
-                "top_k":            5,
-                "similar_tickets":  [...],
-            }
-        """
-        prompt = self._build_prompt(short_description, similar_tickets, valid_groups)
+        prompt = self._build_prompt(
+            short_description, similar_tickets, valid_groups,
+            caution_groups=caution_groups or []
+        )
 
         try:
             response = ollama.chat(
                 model    = self.model,
-                options  = {"temperature": self.temperature},
+                options  = {"temperature": self.temperature, "num_predict": 30},
                 messages = [
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user",   "content": prompt},
                 ],
             )
 
-            raw_answer = response["message"]["content"].strip()
-            predicted  = self._validate(raw_answer, valid_groups)
+            # ollama >= 0.6.1 returns Pydantic ChatResponse
+            raw_answer = response.message.content.strip()
 
-            # If LLM returns something unrecognised, fall back to weighted vote
+            if raw_answer.upper() == "NOT_IT_TICKET":
+                return self._invalid_ticket_result(similar_tickets, raw_answer)
+
+            if not self._looks_like_group(raw_answer, valid_groups):
+                return self._weighted_vote_result(
+                    similar_tickets, valid_groups, llm_raw=raw_answer
+                )
+
+            predicted = self._validate(raw_answer, valid_groups)
+
             if predicted is None:
-                logger.warning("LLM returned unrecognised group '%s'. Using weighted fallback.", raw_answer)
-                return self._weighted_vote_result(similar_tickets, valid_groups,
-                                                  llm_raw=raw_answer)
+                logger.warning(
+                    "LLM returned unrecognised group '%s'. Using weighted fallback.", raw_answer
+                )
+                return self._weighted_vote_result(
+                    similar_tickets, valid_groups, llm_raw=raw_answer
+                )
 
             match_count, confidence_score, confidence_label = self._score(
                 predicted, similar_tickets
             )
 
             return {
+                "is_valid_ticket":  True,
                 "assignment_group": predicted,
                 "confidence":       confidence_label,
                 "confidence_score": confidence_score,
@@ -127,102 +147,104 @@ class LLMAgent:
 
         except Exception as e:
             logger.error("LLM error: %s", e)
-            return self._weighted_vote_result(similar_tickets, valid_groups,
-                                              error=str(e))
+            return self._weighted_vote_result(
+                similar_tickets, valid_groups, error=str(e)
+            )
 
-    # ------------------------------------------------------------------
+    # ─────────────────────────────────────────────────────────────────────────
+    # Non-IT input detection
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _is_non_it_input(self, text: str) -> bool:
+        try:
+            response = ollama.chat(
+                model    = self.model,
+                options  = {"temperature": 0.0},
+                messages = [{"role": "user", "content": VALIDATION_PROMPT + text}],
+            )
+            answer = response.message.content.strip().upper()
+            return answer.startswith("NO")
+        except Exception:
+            return False
+
+    def _looks_like_group(self, raw: str, valid_groups: list[str]) -> bool:
+        raw_lower = raw.lower()
+        if "not_it_ticket" in raw_lower:
+            return True
+        return any(
+            group.lower() in raw_lower or raw_lower in group.lower()
+            for group in valid_groups
+        )
+
+    def _invalid_ticket_result(self, similar_tickets: list[dict], raw: str) -> dict:
+        return {
+            "is_valid_ticket":  False,
+            "assignment_group": None,
+            "confidence":       "low",
+            "confidence_score": 0,
+            "match_count":      0,
+            "top_k":            len(similar_tickets),
+            "raw_llm_response": raw,
+            "similar_tickets":  similar_tickets,
+        }
+
+    # ─────────────────────────────────────────────────────────────────────────
     # Confidence scoring (1-10)
-    # ------------------------------------------------------------------
+    # ─────────────────────────────────────────────────────────────────────────
 
     def _score(self, predicted: str, similar_tickets: list[dict]):
-        """
-        Compute a 1-10 confidence score using weighted similarity votes.
-
-        Uses similarity_raw (0-1 cosine similarity) for mathematically
-        correct weighting. similarity_score is the 1-10 display value.
-        """
         weighted_votes = defaultdict(float)
         for t in similar_tickets:
             weight = t.get("similarity_raw", t["similarity_score"])
             weighted_votes[t["assignment_group"]] += weight
 
-        total_weight = sum(weighted_votes.values()) or 1.0
+        total_weight  = sum(weighted_votes.values()) or 1.0
         winning_share = weighted_votes.get(predicted, 0.0) / total_weight
 
-        # Map share to 1-10
-        if   winning_share >= 0.90:
-            score = 10
-        elif winning_share >= 0.80:
-            score = 9
-        elif winning_share >= 0.70:
-            score = 8
-        elif winning_share >= 0.60:
-            score = 7
-        elif winning_share >= 0.50:
-            score = 6
-        elif winning_share >= 0.42:
-            score = 5
-        elif winning_share >= 0.34:
-            score = 4
-        elif winning_share >= 0.25:
-            score = 3
-        elif winning_share >= 0.15:
-            score = 2
-        else:
-            score = 1
+        if   winning_share >= 0.90: score = 10
+        elif winning_share >= 0.80: score = 9
+        elif winning_share >= 0.70: score = 8
+        elif winning_share >= 0.60: score = 7
+        elif winning_share >= 0.50: score = 6
+        elif winning_share >= 0.42: score = 5
+        elif winning_share >= 0.34: score = 4
+        elif winning_share >= 0.25: score = 3
+        elif winning_share >= 0.15: score = 2
+        else:                       score = 1
 
-        label = (
-            "high"   if score >= 7 else
-            "medium" if score >= 4 else
-            "low"
-        )
-
+        label = "high" if score >= 7 else "medium" if score >= 4 else "low"
         match_count = sum(
-            1 for t in similar_tickets
-            if t["assignment_group"] == predicted
+            1 for t in similar_tickets if t["assignment_group"] == predicted
         )
-
         return match_count, score, label
 
-    # ------------------------------------------------------------------
+    # ─────────────────────────────────────────────────────────────────────────
     # Weighted-vote fallback
-    # ------------------------------------------------------------------
+    # ─────────────────────────────────────────────────────────────────────────
 
     def _weighted_vote_result(
         self,
         similar_tickets: list[dict],
-        valid_groups: list[str],
+        valid_groups:    list[str],
         llm_raw: str = "",
-        error: str = "",
+        error:   str = "",
     ) -> dict:
-        """
-        When the LLM is unavailable or returns garbage, use weighted
-        similarity voting: each similar ticket votes for its group with
-        weight = similarity_raw (raw cosine 0-1). The group with the
-        highest total weight wins.
-        """
         weighted_votes = defaultdict(float)
         for t in similar_tickets:
             weight = t.get("similarity_raw", t["similarity_score"])
             weighted_votes[t["assignment_group"]] += weight
 
-        # Debug: show weighted vote breakdown in console
-        if weighted_votes:
-            logger.debug("Weighted vote breakdown:")
-            total = sum(weighted_votes.values())
-            for grp, w in sorted(weighted_votes.items(), key=lambda x: -x[1]):
-                logger.debug("  %-40s %.3f  (%.1f%%)", grp, w, 100 * w / total)
-
-        if not weighted_votes:
-            predicted = valid_groups[0]
-        else:
-            predicted = max(weighted_votes, key=weighted_votes.__getitem__)
+        predicted = (
+            max(weighted_votes, key=weighted_votes.__getitem__)
+            if weighted_votes else valid_groups[0]
+        )
 
         match_count, confidence_score, confidence_label = self._score(
             predicted, similar_tickets
         )
 
-        result = {
+        return {
+            "is_valid_ticket":  True,
             "assignment_group": predicted,
             "confidence":       confidence_label,
             "confidence_score": confidence_score,
@@ -232,68 +254,122 @@ class LLMAgent:
             "similar_tickets":  similar_tickets,
             "fallback":         True,
         }
-        return result
 
-    # ------------------------------------------------------------------
+    # ─────────────────────────────────────────────────────────────────────────
     # Prompt builder
-    # ------------------------------------------------------------------
+    # KB documents are listed FIRST, then historical tickets.
+    # This ensures the LLM reads authoritative KB context before ticket evidence.
+    # ─────────────────────────────────────────────────────────────────────────
 
     def _build_prompt(
         self,
         short_description: str,
-        similar_tickets: list[dict],
-        valid_groups: list[str],
+        similar_tickets:   list[dict],
+        valid_groups:      list[str],
+        caution_groups:    list[str] = None,
     ) -> str:
-        prompt = "NEW TICKET:\n"
+
+        # Compute weighted-vote winner to show as anchor hint
+        weighted_votes = defaultdict(float)
+        for t in similar_tickets:
+            weight = t.get("similarity_raw", t["similarity_score"])
+            weighted_votes[t["assignment_group"]] += weight
+        top_vote = (
+            max(weighted_votes, key=weighted_votes.__getitem__)
+            if weighted_votes else ""
+        )
+
+        prompt  = "TICKET TO ROUTE:\n"
         prompt += short_description + "\n\n"
 
-        prompt += "SIMILAR HISTORICAL TICKETS (ranked by similarity, highest first):\n"
-        for i, ticket in enumerate(similar_tickets, 1):
-            prompt += (
-                str(i) + ". [" + ticket["assignment_group"] + "] "
-                + ticket["short_description"]
-                + " (similarity: " + str(ticket["similarity_score"]) + ")\n"
-            )
+        hist_tickets = [t for t in similar_tickets
+                        if t.get("source_type", "ticket") in (
+                            "ticket", "rlhf_positive", "rlhf_negative_corrected")]
+        doc_chunks   = [t for t in similar_tickets if t.get("source_type") == "document"]
 
-        prompt += "\nVALID ASSIGNMENT GROUPS:\n"
+        # ── KB documents FIRST — authoritative context before ticket evidence ──
+        if doc_chunks:
+            prompt += "RELEVANT KB ARTICLES (read these first):\n"
+            for i, chunk in enumerate(doc_chunks, 1):
+                team_hint = (" => " + chunk["assignment_group"]) if chunk["assignment_group"] else ""
+                prompt += (
+                    str(i) + ". [" + chunk["short_description"] + "]" + team_hint
+                    + " sim=" + str(chunk["similarity_score"]) + "/10\n"
+                    + "   " + chunk["description"][:300] + "\n"
+                )
+            prompt += "\n"
+
+        # ── Historical tickets SECOND — cross-verification ─────────────────────
+        if hist_tickets:
+            prompt += "SIMILAR HISTORICAL TICKETS (cross-verify with KB above):\n"
+            for i, ticket in enumerate(hist_tickets, 1):
+                src = ticket.get("source_type", "ticket")
+                tag = ""
+                if src == "rlhf_positive":
+                    tag = " [confirmed-correct]"
+                elif src == "rlhf_negative_corrected":
+                    tag = " [human-corrected]"
+                elif ticket["assignment_group"] == top_vote and i == 1:
+                    tag = " [TOP-VOTE]"
+
+                prompt += (
+                    str(i) + ". [" + ticket["assignment_group"] + "]"
+                    + tag + " sim=" + str(ticket["similarity_score"]) + "/10\n"
+                    + "   Title: " + ticket["short_description"] + "\n"
+                )
+                # Include description for top 3 tickets
+                if i <= 3 and ticket.get("description", "").strip():
+                    desc_snippet = ticket["description"][:200].strip()
+                    prompt += "   Detail: " + desc_snippet + "\n"
+            prompt += "\n"
+
+        # Stage 3B RLHF caution hint
+        if caution_groups:
+            prompt += "CAUTION — FREQUENTLY WRONG GROUPS (from human feedback):\n"
+            prompt += "Only use these if similarity is >= 8/10:\n"
+            for g in caution_groups:
+                prompt += "  - " + g + "\n"
+            prompt += "\n"
+
+        if top_vote:
+            prompt += "STATISTICAL SUGGESTION (weighted similarity vote): " + top_vote + "\n\n"
+
+        prompt += "VALID ASSIGNMENT GROUPS:\n"
         for group in valid_groups:
             prompt += "- " + group + "\n"
 
-        prompt += "\nRespond with ONLY the assignment group name:"
+        prompt += "\nOutput ONLY the assignment group name (or NOT_IT_TICKET):"
         return prompt
 
-    # ------------------------------------------------------------------
+    # ─────────────────────────────────────────────────────────────────────────
     # Validation
-    # ------------------------------------------------------------------
+    # ─────────────────────────────────────────────────────────────────────────
 
     def _validate(self, raw: str, valid_groups: list[str]) -> str | None:
-        """
-        Check if the LLM response exactly matches a valid group.
-        Returns None if no match found (caller handles fallback).
-        """
+        # Strip any accidental punctuation the model may add
+        raw = raw.strip().strip(".,;:\"'")
         if raw in valid_groups:
             return raw
-
         raw_lower = raw.lower()
         for group in valid_groups:
             if group.lower() == raw_lower:
                 return group
-
         for group in valid_groups:
             if group.lower() in raw_lower or raw_lower in group.lower():
                 return group
-
         return None
 
-    # ------------------------------------------------------------------
-    # Health check
-    # ------------------------------------------------------------------
+    # ─────────────────────────────────────────────────────────────────────────
+    # Health check — supports all Ollama models including gemma4
+    # ─────────────────────────────────────────────────────────────────────────
 
     def is_available(self) -> bool:
-        """Check if Ollama is running and the model is available."""
+        """Check if Ollama is running and the configured model is available."""
         try:
-            models    = ollama.list()
-            available = [m.model for m in models.models]
+            # ollama >= 0.6.1 returns ListResponse Pydantic object
+            response  = ollama.list()
+            available = [m.model for m in response.models]
             return any(self.model in m for m in available)
         except Exception:
+
             return False

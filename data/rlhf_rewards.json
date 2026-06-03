@@ -1,0 +1,16 @@
+{
+  "IT-Service Desk": {
+    "attempts": 1,
+    "correct": 0,
+    "wrong": 1,
+    "accuracy": 0.0,
+    "reward_sum": -1.0
+  },
+  "IT-FSO-tms-Asia": {
+    "attempts": 1,
+    "correct": 0,
+    "wrong": 1,
+    "accuracy": 0.0,
+    "reward_sum": -1.0
+  }
+}

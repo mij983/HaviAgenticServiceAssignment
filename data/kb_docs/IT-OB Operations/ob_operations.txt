@@ -1,0 +1,80 @@
+TEAM: IT-OB Operations
+
+IT-OB Operations provides support for issues related to Network outages, node down, VPN, Connectivity, ISP,  DNS, SolarWinds, Security Alerts etc.
+
+SolarWinds — "Missing check" alerts
+1. HAVI SolarWinds generated a alert for CI TMS-LON-ASA-Primary and Alert Name Missing check
+2. HAVI SolarWinds generated a alert for CI TMS-LON-ASA-Primary and Alert Name Missing check
+3. HAVI SolarWinds generated a alert for CI TMS-LON-ASA-Primary and Alert Name Missing check
+4. HAVI SolarWinds generated a alert for CI SGP-AP1 and Alert Name Missing check
+5. HAVI SolarWinds generated a alert for CI SGP-AP3 and Alert Name Missing check
+6. HAVI SolarWinds generated a alert for CI SGP-AP2 and Alert Name Missing check
+7. HAVI SolarWinds generated a alert for CI SGP-AP4 and Alert Name Missing check
+8. HAVI SolarWinds generated a alert for CI DUB-CORE-9300.perseco.com and Alert Name Missing check
+9. HAVI SolarWinds generated a alert for CI TMS-LON-ASA-Primary and Alert Name Missing check ||
+
+SolarWinds — Node down / Interface down
+1. HAVI SolarWinds generated a alert for CI NET17528 and Alert Name Havi - Network LAN Node is down
+2. HAVI SolarWinds generated a alert for CI NET14215.de.alpha.local and Alert Name Havi - Network LAN Node Interface down
+3. HAVI SolarWinds generated a alert for CI PTLISBCS161.de.alpha.local and Alert Name Havi - Network LAN Node Interface down
+4. HAVI SolarWinds generated a alert for CI STI-IT-BOMPORTO-SDW1 and Alert Name Havi - Network LAN Node Interface down || UD: INC0150976
+5. HAVI SolarWinds generated a alert for CI HKPAFW02 and Alert Name Havi - Network LAN Node Interface down
+6. HAVI SolarWinds generated a alert for CI NET19009 and Alert Name Havi - Network LAN Node is down
+7. HAVI SolarWinds generated a alert for CI HSC-IT-MILANO-SDW1 and Alert Name Havi - Network LAN Node is down
+8. HAVI SolarWinds generated a alert for CI NET19088.de.alpha.local and Alert Name Havi - Network LAN Node Interface down
+9. HAVI SolarWinds generated a alert for CI NET15331.de.alpha.local and Alert Name Havi - Network LAN Node Interface down
+
+SolarWinds — Node rebooted events
+1. HAVI SolarWinds generated a alert for CI NET16786 and Alert Name Havi - Network LAN Node is rebooted
+2. HAVI SolarWinds generated a alert for CI NET19123, NET19124 and Alert Name Havi - Network LAN Node is rebooted
+3. HAVI SolarWinds generated a alert for CI NET15427, NET15428 and Alert Name Havi - Network LAN Node is rebooted
+4. HAVI SolarWinds generated a alert for CI NET16992 and Alert Name Havi - Network LAN Node is rebooted
+5. HAVI SolarWinds generated a alert for CI NET19590 and Alert Name Havi - Network LAN Node is rebooted
+6. HAVI SolarWinds generated a alert for CI NET18853 and Alert Name Havi - Network LAN Node is rebooted
+7. HAVI SolarWinds generated a alert for CI NET18445 and Alert Name Havi - Network LAN Node is rebooted
+
+SolarWinds — High Rx/Tx / Utilization
+1. HAVI SolarWinds generated a alert for CI NET18484.havilogasia.com and Alert Name Havi - Network LAN Node Interface 
+2. High Rx/Tx percent utilization
+3. HAVI SolarWinds generated a alert for CI NET17745, NET18484.havilogasia.com and Alert Name Havi - Network LAN Node Interface High Rx/Tx percent utilization
+4. HAVI SolarWinds generated a alert for CI NET17742, NET17743, NET18484.havilogasia.com and Alert Name Havi - Network LAN Node Interface High Rx/Tx percent utili
+5. HAVI SolarWinds generated a alert for CI NET17742, NET17743 and Alert Name Havi - Network LAN Node Interface High Rx/Tx percent utilization
+
+SolarWinds — Hardware sensor / hardware warnings
+1. HAVI SolarWinds generated a alert for CI HLNLAM3EQS01.de.alpha.local and Alert Name Havi - Network LAN Node Hardware sensor is in warning or Critical state
+2. HAVI SolarWinds generated a alert for CI HLNLAM3EQS01.de.alpha.local and Alert Name Havi - Network LAN Node Hardware sensor is in warning or Critical state
+
+MerakiPortal — DNS / AP events
+1. HAVI MerakiPortal generated a warning alert for EU-GB-Hemel and Alert Name Misconfigured DNS | ***
+2. HAVI MerakiPortal generated a warning alert for EU-GB-Hemel and Alert Name Misconfigured DNS
+3. HAVI MerakiPortal generated a clear alert for EU-SK-Trnava and Alert Name APs came up
+4. HAVI MerakiPortal generated a clear alert for EU-FI-Vantaa and Alert Name APs came up
+5. HAVI MerakiPortal generated a critical alert for EU-FI-Vantaa and Alert Name APs went down | ***
+6. HAVI MerakiPortal generated a critical alert for EU-SE-Tumba and Alert Name APs went down
+
+Security Alerts
+1. HAVI Security Alert! : Threat_Indicator_Match_Malicious_Traffic_IP_Outbound
+2. HAVI Security Alert! : Threat_Indicator_Match_Malicious_Traffic_IP_Outbound
+3. HAVI Security Alert! : Threat_Indicator_Match_Malicious_Traffic_IP_Inbound
+4. HAVI Security Alert! : Threat_Indicator_Match_Malicious_Traffic_IP_Outbound
+
+Network outages / VPN / Connectivity / ISP issues
+1. there is no internet in Kladno DC. | ***
+2. No internet at the HAVI Kraków office, Wadowicka 3A | ***
+3. Network Connectivity Issue - Lost Network connectivity to all Hong Kong Servers
+4. Hardware failure NL - Orange not responding to ISP (Odido) | ***
+5. Cannot connect to Informatica Server from Mitsui Network. | ***
+6. Infor Ilsfeld HSC-WMS Network is not working | ***
+7. No internet at the HAVI Kraków office (duplicate context removed) | ***
+8. Not able to connect to VPN
+9. Global protect is not connecting
+
+Application access / Service errors
+1. GADC SAP Hana Access Error | OS: *** | ***
+2. Cannot connect to Informatica Server from Mitsui Network. | ***
+3. Infor Ilsfeld HSC-WMS Network is not working | ***
+
+Monitoring / Tool problems & Interface issues
+1. Issue with SolarWinds interface
+2. HAVI SolarWinds generated a alert for CI TMS-LON-ASA-Primary and Alert Name Missing check | ***
+3. HAVI SolarWinds generated a alert for CI TMS-LON-ASA-Primary and Alert Name Missing check | ***

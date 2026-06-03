@@ -13,9 +13,27 @@ ChromaDB stores:
   - Persists to disk so rebuild is only needed when CSV changes
 
 Incremental loading:
-  Pass start and end row indices to load the CSV in chunks.
-  Each chunk is ADDED to the existing knowledge base — nothing is overwritten.
-  IDs are based on the global row index so they never clash across runs.
+  The build() method accepts start and end row indices so the CSV can be
+  loaded in chunks (e.g. 10,000 rows at a time) to avoid memory errors
+  on machines with limited RAM.
+
+  Each chunk ADDS to the existing knowledge base — nothing is overwritten.
+  IDs use the global row index (start + i) so they never clash across runs.
+
+  Usage:
+    python build_knowledge_base.py --start 0     --end 10000
+    python build_knowledge_base.py --start 10000 --end 20000
+    ... and so on
+
+Similarity scores:
+  Raw cosine similarity (0-1) is scaled to 1-10 for display.
+  The raw value is preserved as similarity_raw for weighted-vote math
+  in the LLM agent.
+
+Search order:
+  search() returns KB document chunks FIRST, then historical tickets.
+  This ensures the LLM prompt reads authoritative KB context before
+  cross-verifying with ticket evidence.
 """
 
 import csv
@@ -52,12 +70,19 @@ class KnowledgeBaseAgent:
         """
         Build or append to the knowledge base from the CSV file.
 
-        - start / end  : row slice to process (0-based, end is exclusive)
-        - force_rebuild: wipe everything and start from scratch
+        Args:
+            csv_path        : path to training_tickets.csv
+            embedding_agent : EmbeddingAgent instance
+            force_rebuild   : if True, wipe existing data and start fresh
+            start           : first row index to process (0-based)
+            end             : last row index to process (exclusive)
 
-        Rows are read from the full CSV but only the slice [start:end] is
-        embedded and stored. IDs use the global row index so multiple runs
-        never produce duplicate or clashing IDs.
+        Reads the full CSV but only embeds and stores rows in [start, end).
+        IDs are set to str(start + i) so multiple runs never produce
+        duplicate or clashing IDs in ChromaDB.
+
+        Embedding is done in chunks of 2000 rows to keep memory usage low.
+        ChromaDB insertion is done in batches of 500.
         """
         self._connect()
 
@@ -80,8 +105,7 @@ class KnowledgeBaseAgent:
             print("  Starting fresh knowledge base.")
             print("  Loading rows " + str(start) + " to " + str(end) + "...")
 
-        # Read full CSV and keep track of global row index
-        # Only rows in [start, end) are kept for embedding
+        # Read full CSV — track global row index for stable IDs
         all_rows = []
         with open(csv_path, newline="", encoding="latin-1") as fh:
             for row in csv.DictReader(fh):
@@ -103,13 +127,13 @@ class KnowledgeBaseAgent:
         rows = all_rows[start:end]
 
         if not rows:
-            print("  [WARNING] No rows found in range " + str(start) + " to " + str(end) + ".")
+            print("  [WARNING] No rows found in range " + str(start) + " to " + str(end))
             print("  Total rows in CSV: " + str(len(all_rows)))
             return self.collection.count()
 
         print("  " + str(len(rows)) + " tickets to embed in this batch...")
 
-        # Embed in chunks of 2000 to keep memory usage low
+        # Embed in chunks of 2000 to keep RAM usage low
         chunk_size = 2000
         embeddings = []
         for i in range(0, len(rows), chunk_size):
@@ -135,6 +159,8 @@ class KnowledgeBaseAgent:
                         "short_description": r["short_description"],
                         "description":       r["description"][:500],
                         "assignment_group":  r["assignment_group"],
+                        "source_type":       "ticket",
+                        "file_name":         "",
                     }
                     for r in batch
                 ],
@@ -147,11 +173,21 @@ class KnowledgeBaseAgent:
 
     def search(self, query_embedding: list[float], top_k: int = 5) -> list[dict]:
         """
-        Find the top-K most similar tickets to the query embedding.
+        Find the top-K most similar entries (tickets OR document chunks).
+
+        Results are sorted so KB document chunks appear FIRST, followed by
+        historical tickets. Within each group, ordering is by similarity
+        score descending. This ensures the LLM prompt reads KB context
+        before cross-verifying with ticket evidence.
 
         Returns list of dicts with:
-          short_description, description, assignment_group,
-          similarity_score (1-10), similarity_raw (0-1)
+          short_description : str
+          description       : str
+          assignment_group  : str
+          similarity_score  : float  1.0-10.0  (scaled for display)
+          similarity_raw    : float  0.0-1.0   (kept for weighted-vote math)
+          source_type       : "ticket" | "document"
+          file_name         : str  (document chunks only, else "")
         """
         if self.collection is None:
             self._connect()
@@ -165,18 +201,31 @@ class KnowledgeBaseAgent:
         tickets = []
         for i in range(len(results["ids"][0])):
             meta = results["metadatas"][0][i]
-            # cosine similarity in [0, 1]; scale to 1-10 for display
+            # cosine similarity in [0,1]; scale to 1-10 for display
             raw_sim = round(1 - results["distances"][0][i], 4)
             scaled  = round(1 + raw_sim * 9, 1)   # 0.0 -> 1.0,  1.0 -> 10.0
+            source_type = meta.get("source_type", "ticket")
             tickets.append({
                 "short_description": meta.get("short_description", ""),
                 "description":       meta.get("description", ""),
                 "assignment_group":  meta.get("assignment_group", ""),
-                "similarity_score":  scaled,     # 1.0 – 10.0  (for display)
-                "similarity_raw":    raw_sim,    # 0.0 – 1.0   (for vote math)
+                "similarity_score":  scaled,       # 1.0 – 10.0  (display)
+                "similarity_raw":    raw_sim,      # 0.0 – 1.0   (vote math)
+                "source_type":       source_type,  # "ticket" or "document"
+                "file_name":         meta.get("file_name", ""),
             })
 
-        return tickets
+        # ── Sort: KB documents first, then tickets — both by similarity desc ──
+        doc_results    = sorted(
+            [t for t in tickets if t["source_type"] == "document"],
+            key=lambda x: x["similarity_raw"], reverse=True
+        )
+        ticket_results = sorted(
+            [t for t in tickets if t["source_type"] != "document"],
+            key=lambda x: x["similarity_raw"], reverse=True
+        )
+
+        return doc_results + ticket_results
 
     def count(self) -> int:
         """Return number of tickets in the knowledge base."""
