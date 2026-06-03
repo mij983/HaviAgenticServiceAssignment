@@ -1,4 +1,4 @@
-# Havi Agentic Service Assignment – AI Ticket Routing System
+# Havi Agentic Service Assignment – AI Ticket Routing System - POC (This workflow operates independently of ServiceNow)
 ## Complete File-by-File Technical Documentation
 
 > **AI-powered intelligent ticket routing system** that automatically predicts the correct assignment group for IT incidents using semantic search, vector databases, and local LLMs.
