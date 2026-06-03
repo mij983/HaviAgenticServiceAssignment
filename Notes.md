@@ -984,6 +984,3 @@ Ticket: "Unable to connect to VPN after password reset"
 > *"The system predicts the correct IT support assignment group by comparing new incidents with historical tickets and KB articles using embeddings, vector search, and a local LLM - with every component working together through a modular agent architecture."*
 
 ---
-
-*For questions during the meeting, refer to the agent-specific documentation above.*
-```
