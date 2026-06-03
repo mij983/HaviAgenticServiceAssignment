@@ -10,7 +10,7 @@
 | Technology | Purpose |
 |------------|---------|
 | Python | Core backend development |
-| Flask/FastAPI | API and web application |
+| Flask | API and web application |
 | ChromaDB | Vector database storage |
 | Sentence Transformers | Embedding generation |
 | Transformers | NLP processing |
@@ -75,7 +75,7 @@ Final Assignment Group Prediction
 
 **What it does:**
 - Entry point for the entire application
-- Starts the Flask/FastAPI web server
+- Starts the Flask web server
 - Creates the web UI interface
 - Handles HTTP requests from users
 - Accepts ticket input from forms/API
